@@ -17,6 +17,15 @@ YCode 是一个 Windows 桌面 AI 编程助手项目，包含：
 
 ## 构建
 
+构建脚本会自动尝试通过 `vswhere` 查找 Visual Studio。若你的安装路径不是默认位置，可先设置这些环境变量：
+
+```bat
+set VS_VCVARS64=C:\Path\To\VC\Auxiliary\Build\vcvars64.bat
+set VCPKG_ROOT=C:\vcpkg
+set VCPKG_TRIPLET=x64-windows
+set QT_DIR=C:\Qt\6.8.0\msvc2022_64
+```
+
 先在仓库根目录构建 Agent：
 
 ```bat
@@ -30,7 +39,11 @@ cd YZCodex
 build.bat
 ```
 
-本仓库中的批处理脚本保留了当前开发环境的默认路径。如果你的 Visual Studio、Qt 或 vcpkg 安装位置不同，请先调整脚本里的路径。
+启动时客户端会自动从可执行文件位置向上查找仓库根目录。需要覆盖时可设置：
+
+```bat
+set YCODE_PROJECT_ROOT=D:\path\to\YCode
+```
 
 ## 配置
 
@@ -46,7 +59,7 @@ set DEEPSEEK_API_KEY=your-api-key-here
 .\manage_api_key.ps1
 ```
 
-不要把真实 API Key、会话文件或本地构建产物提交到仓库。
+客户端设置窗口中输入的 API Key 只在当前运行会话中使用，不会写入 Qt 设置文件；重启后建议从 `DEEPSEEK_API_KEY` 环境变量读取。不要把真实 API Key、会话文件或本地构建产物提交到仓库。
 
 ## 自更新
 

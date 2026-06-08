@@ -1,5 +1,7 @@
 # YCode API Key 管理脚本
 
+$Script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+
 function Show-Menu {
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host "YCode DeepSeek API Key 管理" -ForegroundColor Cyan
@@ -7,7 +9,7 @@ function Show-Menu {
     Write-Host ""
     Write-Host "1. 查看当前 API Key"
     Write-Host "2. 设置/修改 API Key (当前会话)"
-    Write-Host "3. 设置 API Key (永久，系统环境变量)"
+    Write-Host "3. 设置 API Key (永久，用户环境变量)"
     Write-Host "4. 启动 YCode"
     Write-Host "5. 退出"
     Write-Host ""
@@ -35,23 +37,13 @@ function Set-ApiKeySession {
 
 function Set-ApiKeyPermanent {
     $key = Read-Host "请输入 DeepSeek API Key"
-    
-    # 检查权限
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    
-    if (-not $isAdmin) {
-        Write-Host "需要管理员权限来设置系统环境变量" -ForegroundColor Red
-        Write-Host "请以管理员身份运行此脚本" -ForegroundColor Yellow
-        return
-    }
-    
     [Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", $key, [EnvironmentVariableTarget]::User)
     Write-Host "API Key 已设置到用户环境变量" -ForegroundColor Green
     Write-Host "请重启应用程序以使用新的 API Key" -ForegroundColor Yellow
 }
 
 function Start-YCode {
-    $exe = "F:\YiyangzaiCode\YZCodex\build\msvc2022_64\Release\YZCodex.exe"
+    $exe = Join-Path $Script:Root "YZCodex\build\msvc2022_64\Release\YCode.exe"
     
     if (-not (Test-Path $exe)) {
         Write-Host "错误: 找不到应用程序: $exe" -ForegroundColor Red
@@ -67,7 +59,7 @@ function Start-YCode {
         }
     }
     
-    Push-Location -Path "F:\YiyangzaiCode"
+    Push-Location -Path $Script:Root
     Start-Process -FilePath $exe
     Pop-Location
     Write-Host "YCode 已启动" -ForegroundColor Green

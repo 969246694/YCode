@@ -18,6 +18,7 @@
 #include <QShortcut>
 #include <QInputDialog>
 #include <QApplication>
+#include <QCoreApplication>
 #include <QMenuBar>
 #include <QScrollBar>
 #include <QTextBlock>
@@ -38,7 +39,9 @@ MainWindow::MainWindow(QWidget *parent)
       selfUpdateInProgress(false),
       currentActivity(0)
 {
-    setWindowIcon(QIcon("F:/YiyangzaiCode/YCode.ico"));
+    QString iconPath = defaultIconPath();
+    if (!iconPath.isEmpty())
+        setWindowIcon(QIcon(iconPath));
 
     QByteArray envApiKey = qgetenv("DEEPSEEK_API_KEY");
     apiKey = QString::fromUtf8(envApiKey);
@@ -62,8 +65,8 @@ MainWindow::MainWindow(QWidget *parent)
     if (apiKey.isEmpty())
     {
         QMessageBox::information(this, "欢迎使用 YCode",
-                                 "请先在设置中配置 DeepSeek API Key\n\n"
-                                 "你可以在 F:/YiyangzaiCode 设置环境变量 DEEPSEEK_API_KEY");
+                                 "请先设置 DeepSeek API Key。\n\n"
+                                 "推荐设置环境变量 DEEPSEEK_API_KEY；也可以在设置中输入临时 API Key。");
     }
 
     // 安装事件过滤器监听编辑器光标变化
@@ -381,7 +384,7 @@ void MainWindow::setupActivityBar()
             {
         QInputDialog inputDlg(this);
         inputDlg.setWindowTitle("YCode 设置");
-        inputDlg.setLabelText("DeepSeek API Key:");
+        inputDlg.setLabelText("DeepSeek API Key (仅当前会话保存；推荐使用 DEEPSEEK_API_KEY 环境变量):");
         inputDlg.setTextValue(apiKey);
         inputDlg.setStyleSheet(
             "QInputDialog { background: #2D2D2D; }"
@@ -412,7 +415,8 @@ void MainWindow::setupActivityBar()
 void MainWindow::setupFileExplorer()
 {
     fileSystemModel = new QFileSystemModel(this);
-    fileSystemModel->setRootPath(currentProjectPath.isEmpty() ? "F:/YiyangzaiCode" : currentProjectPath);
+    QString rootPath = currentProjectPath.isEmpty() ? defaultProjectPath() : currentProjectPath;
+    fileSystemModel->setRootPath(rootPath);
     fileSystemModel->setFilter(QDir::NoDot | QDir::AllDirs | QDir::Files);
     fileSystemModel->setNameFilters(QStringList()
                                     << "*.cpp" << "*.h" << "*.hpp" << "*.c"
@@ -425,8 +429,7 @@ void MainWindow::setupFileExplorer()
 
     fileTreeView = new QTreeView();
     fileTreeView->setModel(fileSystemModel);
-    fileTreeView->setRootIndex(fileSystemModel->index(currentProjectPath.isEmpty() ?
-                                                          "F:/YiyangzaiCode" : currentProjectPath));
+    fileTreeView->setRootIndex(fileSystemModel->index(rootPath));
     fileTreeView->setHeaderHidden(true);
     fileTreeView->setAnimated(true);
     fileTreeView->setIndentation(16);
@@ -467,7 +470,7 @@ void MainWindow::setupFileExplorer()
     );
 
     // 文件夹和文件图标 (使用 Unicode)
-    fileSystemModel->setData(fileSystemModel->index(currentProjectPath), "📂", Qt::DecorationRole);
+    fileSystemModel->setData(fileSystemModel->index(rootPath), "📂", Qt::DecorationRole);
 
     connect(fileTreeView, &QTreeView::doubleClicked, this, &MainWindow::onFileTreeDoubleClicked);
 
@@ -1437,13 +1440,17 @@ void MainWindow::updateStatusBar()
 void MainWindow::loadSettings()
 {
     QSettings settings;
-    currentProjectPath = settings.value("projectPath", "F:/YiyangzaiCode").toString();
+    QString fallbackProjectPath = defaultProjectPath();
+    currentProjectPath = settings.value("projectPath", fallbackProjectPath).toString();
+    if (currentProjectPath.isEmpty() || !QDir(currentProjectPath).exists())
+        currentProjectPath = fallbackProjectPath;
 
     QByteArray envApiKey = qgetenv("DEEPSEEK_API_KEY");
     if (!envApiKey.isEmpty())
         apiKey = QString::fromUtf8(envApiKey);
     else
-        apiKey = settings.value("apiKey", "").toString();
+        apiKey.clear();
+    settings.remove("apiKey");
 
     showBottomPanel = settings.value("showBottomPanel", true).toBool();
 
@@ -1462,10 +1469,51 @@ void MainWindow::saveSettings()
 {
     QSettings settings;
     settings.setValue("projectPath", currentProjectPath);
-    settings.setValue("apiKey", apiKey);
+    settings.remove("apiKey");
     settings.setValue("showBottomPanel", showBottomPanel);
     settings.setValue("geometry", saveGeometry());
     settings.setValue("windowState", saveState());
+}
+
+QString MainWindow::defaultProjectPath() const
+{
+    QByteArray envRoot = qgetenv("YCODE_PROJECT_ROOT");
+    if (!envRoot.isEmpty())
+    {
+        QString envPath = QDir::fromNativeSeparators(QString::fromUtf8(envRoot));
+        if (QDir(envPath).exists())
+            return QDir(envPath).absolutePath();
+    }
+
+    QDir dir(QCoreApplication::applicationDirPath());
+    for (int i = 0; i < 8; ++i)
+    {
+        QString candidate = dir.absolutePath();
+        if (QFileInfo::exists(QDir(candidate).filePath("agent.cpp")) &&
+            QFileInfo::exists(QDir(candidate).filePath("YZCodex")))
+        {
+            return candidate;
+        }
+
+        if (!dir.cdUp())
+            break;
+    }
+
+    return QDir::currentPath();
+}
+
+QString MainWindow::defaultIconPath() const
+{
+    QDir root(defaultProjectPath());
+    QString rootIconPath = root.filePath("YCode.ico");
+    if (QFileInfo::exists(rootIconPath))
+        return rootIconPath;
+
+    QString resourceIconPath = root.filePath("YZCodex/resources/icon.ico");
+    if (QFileInfo::exists(resourceIconPath))
+        return resourceIconPath;
+
+    return QString();
 }
 
 bool MainWindow::saveAllModifiedFilesForSelfUpdate()

@@ -95,6 +95,8 @@ private:
     bool saveAllModifiedFilesForSelfUpdate();
     bool startYCodeSelfUpdate(const QStringList &arguments = QStringList());
     QString runGitCommand(const QStringList &arguments, int timeoutMs, bool *ok = nullptr);
+    QString defaultProjectPath() const;
+    QString defaultIconPath() const;
 
     // ============ 布局组件 ============
     // 活动栏 (最左侧)

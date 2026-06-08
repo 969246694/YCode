@@ -1,103 +1,57 @@
-# YZCodex - AI 编程助手
+# YZCodex - YCode Qt 客户端
 
-基于 DeepSeek V4-Pro 的 Qt 客户端应用程序。
+YZCodex 是 YCode 的 Windows Qt 图形客户端，提供多标签代码编辑器、文件树、终端面板、搜索替换和 DeepSeek Agent 对话界面。
 
-## 功能特性
+## 依赖
 
-- 🎨 现代深色主题界面
-- 📝 多标签页代码编辑器（带语法高亮和行号）
-- 💬 实时对话界面
-- 🤖 集成 DeepSeek Agent
-- 📁 项目文件浏览器
-- 🔧 本地工具调用支持
+- Visual Studio 2022 C++ 工具链
+- CMake 3.20+
+- Qt 6.8+，MSVC 2022 64-bit
+- 仓库根目录已构建出的 `agent.exe`
 
-## 安装依赖
+## 构建
 
-### 1. 安装 Qt 6.8.x
+如果 Visual Studio 或 Qt 不在默认位置，可先设置：
 
-本项目已检测到本地 Qt 安装：
+```bat
+set VS_VCVARS64=C:\Path\To\VC\Auxiliary\Build\vcvars64.bat
+set QT_DIR=C:\Qt\6.8.0\msvc2022_64
+```
 
-- `C:\Qt\6.8.0\msvc2022_64`
+先在仓库根目录构建 Agent：
 
-如果你还没有安装 Qt，请使用 Qt 官方安装器安装 **Qt 6.8.x** 和 **MSVC 2022 64-bit**。
-
-### 2. 编译项目
-
-#### 方法一：使用编译脚本（推荐）
-
-```bash
-cd F:\YiyangzaiCode\YZCodex
+```bat
+cd ..
 build.bat
 ```
 
-#### 方法二：手动编译
+再构建客户端：
 
-```bash
-cd F:\YiyangzaiCode\YZCodex
-mkdir build
-cd build
-cmake .. -DCMAKE_PREFIX_PATH="C:/Qt/6.8.0/msvc2022_64/lib/cmake" -DCMAKE_BUILD_TYPE=Release -A x64
-cmake --build . --config Release
-```
-
-### 3. 测试 Agent
-
-#### 方法一：使用编译脚本（推荐）
-
-```bash
-cd F:\YiyangzaiCode\YZCodex
+```bat
+cd YZCodex
 build.bat
 ```
 
-#### 方法二：手动编译
+构建产物：
 
-```bash
-cd F:\YiyangzaiCode\YZCodex
-mkdir build
-cd build
-cmake .. -DCMAKE_PREFIX_PATH="C:/Qt/6.8.0/msvc2022_64" -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-```
-
-### 3. 测试 Agent
-
-```bash
-cd F:\YiyangzaiCode\YZCodex
-test_agent.bat
-```
-
-### 3. 运行程序
-
-```bash
-./Release/YZCodex.exe
+```text
+build\msvc2022_64\Release\YCode.exe
 ```
 
 ## 配置
 
-### API Key 设置
+运行前建议设置 DeepSeek API Key：
 
-在运行程序前，请设置 DeepSeek API Key：
-
-```bash
-# 方法1：环境变量
+```bat
 set DEEPSEEK_API_KEY=your-api-key-here
-
-# 方法2：在程序设置中配置
 ```
 
-### 项目结构
+也可以在客户端设置窗口中输入临时 API Key。临时 API Key 只在当前运行会话中使用，不会写入 Qt 设置文件。
 
-```
-F:\YiyangzaiCode\YZCodex\
-├── CMakeLists.txt          # CMake 配置
-├── main.cpp               # 程序入口
-├── MainWindow.h/.cpp      # 主窗口
-├── ChatWidget.h/.cpp      # 对话组件
-├── CodeEditor.h/.cpp      # 代码编辑器
-├── AgentManager.h/.cpp    # Agent 管理器
-└── resources/
-    ├── style.qss          # 样式表
-    └── icon.ico           # 应用程序图标
+如果客户端无法自动识别仓库根目录，可设置：
+
+```bat
+set YCODE_PROJECT_ROOT=D:\path\to\YCode
 ```
 
 ## 快捷键
@@ -107,24 +61,9 @@ F:\YiyangzaiCode\YZCodex\
 - `Ctrl+S`: 保存文件
 - `Ctrl+Shift+S`: 另存为
 - `Ctrl+Enter`: 发送消息
+- `Ctrl+Shift+P`: 命令面板
+- `Ctrl+Shift+F`: 全局搜索
 
-## 工具调用
+## 自更新
 
-在对话中使用以下命令调用本地工具：
-
-- `/tool help` - 显示帮助
-- `/tool shell <命令>` - 执行 shell 命令
-- `/tool ls <目录>` - 列出目录内容
-- `/tool cat <文件>` - 查看文件内容
-- `/tool env` - 显示环境变量
-
-## 开发说明
-
-- 使用 Qt 6.8+ 和 C++17
-- 支持 Windows 平台
-- 集成 DeepSeek API
-- 深色主题设计
-
-## 许可证
-
-MIT License
+使用 `git clone` 部署时，客户端菜单 `帮助 -> 检查更新...` 会对比本地版本和 `origin/main`。发现新版本后会执行 `git pull --ff-only origin main`，然后重建 Agent 和客户端并重启 YCode。

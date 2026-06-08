@@ -26,8 +26,15 @@ set(HEADERS
     SyntaxHighlighter.h
 )
 
+set(YCODE_ICON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../YCode.ico")
+if(NOT EXISTS "${YCODE_ICON_SOURCE}")
+    set(YCODE_ICON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
+endif()
+file(TO_NATIVE_PATH "${YCODE_ICON_SOURCE}" YCODE_ICON_PATH)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/YCode.rc.in" "${CMAKE_CURRENT_BINARY_DIR}/YCode.rc" @ONLY)
+
 set(RESOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/YCode.rc
+    ${CMAKE_CURRENT_BINARY_DIR}/YCode.rc
 )
 
 qt_add_executable(YCode ${SOURCES} ${HEADERS} ${RESOURCES})
