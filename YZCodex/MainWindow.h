@@ -18,6 +18,7 @@
 #include <QToolButton>
 #include <QPlainTextEdit>
 #include <QMenu>
+#include <QStringList>
 
 class ChatWidget;
 class CodeEditor;
@@ -51,6 +52,7 @@ private slots:
     void onAgentStatusChanged(const QString &status);
     void onAgentRestarting();            // ★ 新增：agent 正在重启
     void onYCodeSelfUpdateRequested();
+    void checkForUpdates();
 
     // 视图切换
     void showFileExplorer();
@@ -91,6 +93,8 @@ private:
     void updateStatusBar();
     void connectAgentSignals();          // ★ 抽取：连接 AgentManager 信号
     bool saveAllModifiedFilesForSelfUpdate();
+    bool startYCodeSelfUpdate(const QStringList &arguments = QStringList());
+    QString runGitCommand(const QStringList &arguments, int timeoutMs, bool *ok = nullptr);
 
     // ============ 布局组件 ============
     // 活动栏 (最左侧)

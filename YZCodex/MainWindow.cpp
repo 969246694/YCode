@@ -784,6 +784,8 @@ void MainWindow::setupMenuBar()
 
     // 帮助菜单
     QMenu *helpMenu = menuBar->addMenu("帮助(&H)");
+    helpMenu->addAction("检查更新...", this, &MainWindow::checkForUpdates);
+    helpMenu->addSeparator();
     helpMenu->addAction("ℹ️ 关于 YCode", [this]()
                         { QMessageBox::about(this, "关于 YCode",
                                              "YCode v2.0 - VSCode Style\n\n"
@@ -1301,16 +1303,80 @@ void MainWindow::onYCodeSelfUpdateRequested()
 {
     appendToChat("YCode 将退出并执行完整自更新：重建 Agent、重建客户端、更新快捷方式，然后重新启动。", false);
     statusMessage->setText("YCode 自更新准备中...");
+    startYCodeSelfUpdate();
+}
 
-    if (!saveAllModifiedFilesForSelfUpdate())
+void MainWindow::checkForUpdates()
+{
+    statusMessage->setText("正在检查更新...");
+
+    bool localOk = false;
+    QString localSha = runGitCommand(QStringList() << "rev-parse" << "HEAD", 5000, &localOk).trimmed();
+    if (!localOk || localSha.isEmpty())
+    {
+        QMessageBox::warning(this, "检查更新失败",
+                             "当前目录不是有效的 Git 部署，或无法读取本地版本。\n\n"
+                             "请使用 git clone 部署项目，或手动从 GitHub 下载最新版。");
+        statusMessage->setText("检查更新失败");
         return;
+    }
+
+    bool remoteOk = false;
+    QString remoteOutput = runGitCommand(QStringList() << "ls-remote" << "origin" << "main", 20000, &remoteOk).trimmed();
+    if (!remoteOk || remoteOutput.isEmpty())
+    {
+        QMessageBox::warning(this, "检查更新失败",
+                             "无法访问远端 origin/main。\n\n" + remoteOutput);
+        statusMessage->setText("检查更新失败");
+        return;
+    }
+
+    QString remoteSha = remoteOutput.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).value(0);
+    if (remoteSha.isEmpty())
+    {
+        QMessageBox::warning(this, "检查更新失败", "远端返回内容无法解析:\n\n" + remoteOutput);
+        statusMessage->setText("检查更新失败");
+        return;
+    }
+
+    if (remoteSha == localSha)
+    {
+        QMessageBox::information(this, "已是最新版",
+                                 "当前已经是 origin/main 的最新版。\n\n"
+                                 "版本: " + localSha.left(12));
+        statusMessage->setText("已是最新版");
+        return;
+    }
+
+    QMessageBox::StandardButton result = QMessageBox::question(
+        this,
+        "发现新版本",
+        "发现 origin/main 有新版本。\n\n"
+        "当前版本: " + localSha.left(12) + "\n"
+        "最新版本: " + remoteSha.left(12) + "\n\n"
+        "是否立即拉取、重建并重启 YCode？",
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (result != QMessageBox::Yes)
+    {
+        statusMessage->setText("已取消更新");
+        return;
+    }
+
+    startYCodeSelfUpdate(QStringList() << "--pull");
+}
+
+bool MainWindow::startYCodeSelfUpdate(const QStringList &arguments)
+{
+    if (!saveAllModifiedFilesForSelfUpdate())
+        return false;
 
     QString updaterPath = QDir(currentProjectPath).filePath("ycode_self_update.bat");
     if (!QFile::exists(updaterPath))
     {
         appendToChat("错误: 找不到自更新脚本 " + updaterPath, false);
         statusMessage->setText("YCode 自更新失败");
-        return;
+        return false;
     }
 
     saveSettings();
@@ -1319,6 +1385,9 @@ void MainWindow::onYCodeSelfUpdateRequested()
         agentManager->stop();
 
     QString command = "\"" + QDir::toNativeSeparators(updaterPath) + "\"";
+    for (const QString &argument : arguments)
+        command += " " + argument;
+
     bool started = QProcess::startDetached("cmd.exe", QStringList() << "/c" << command, currentProjectPath);
     if (!started)
     {
@@ -1326,12 +1395,13 @@ void MainWindow::onYCodeSelfUpdateRequested()
         statusMessage->setText("YCode 自更新失败");
         if (agentManager && !apiKey.isEmpty())
             agentManager->start();
-        return;
+        return false;
     }
 
     selfUpdateInProgress = true;
     statusMessage->setText("YCode 正在退出以完成自更新...");
     QTimer::singleShot(200, qApp, &QApplication::quit);
+    return true;
 }
 
 // ============================================================
@@ -1428,6 +1498,38 @@ bool MainWindow::saveAllModifiedFilesForSelfUpdate()
     }
 
     return true;
+}
+
+QString MainWindow::runGitCommand(const QStringList &arguments, int timeoutMs, bool *ok)
+{
+    QProcess process;
+    process.setProgram("git");
+    process.setArguments(arguments);
+    process.setWorkingDirectory(currentProjectPath);
+    process.setProcessChannelMode(QProcess::MergedChannels);
+    process.start();
+
+    if (!process.waitForStarted(3000))
+    {
+        if (ok)
+            *ok = false;
+        return "git failed to start";
+    }
+
+    if (!process.waitForFinished(timeoutMs))
+    {
+        process.kill();
+        process.waitForFinished(1000);
+        if (ok)
+            *ok = false;
+        return "git command timed out";
+    }
+
+    QString output = QString::fromUtf8(process.readAll()).trimmed();
+    bool success = process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0;
+    if (ok)
+        *ok = success;
+    return output;
 }
 
 void MainWindow::updateFileTree(const QString &path)
