@@ -50,6 +50,7 @@ private slots:
     void onAgentError(const QString &error);
     void onAgentStatusChanged(const QString &status);
     void onAgentRestarting();            // ★ 新增：agent 正在重启
+    void onYCodeSelfUpdateRequested();
 
     // 视图切换
     void showFileExplorer();
@@ -89,6 +90,7 @@ private:
     void updateFileTree(const QString &path);
     void updateStatusBar();
     void connectAgentSignals();          // ★ 抽取：连接 AgentManager 信号
+    bool saveAllModifiedFilesForSelfUpdate();
 
     // ============ 布局组件 ============
     // 活动栏 (最左侧)
@@ -153,6 +155,7 @@ private:
     QString currentProjectPath;
     QString apiKey;
     bool showBottomPanel;
+    bool selfUpdateInProgress;
     int currentActivity;  // 0=Explorer, 1=Search, 2=Chat
 };
 

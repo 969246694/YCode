@@ -46,6 +46,8 @@ void AgentManager::startProcess()
     {
         qDebug() << "API Key 为空，不设置环境变量";
     }
+    env.insert("YCODE_MANAGED", "1");
+    env.insert("YCODE_PROJECT_ROOT", QDir::toNativeSeparators(projectPath));
     agentProcess->setProcessEnvironment(env);
 
     // 查找 agent.exe
@@ -161,13 +163,32 @@ void AgentManager::onReadyReadStandardOutput()
 
     if (!output.isEmpty())
     {
-        // ★ 检测重启信号
-        if (output.contains("SIGNAL:RESTART_AGENT"))
+        const QString restartAgentSignal = "SIGNAL:RESTART_AGENT";
+        const QString rebuildRestartYCodeSignal = "SIGNAL:REBUILD_RESTART_YCODE";
+
+        if (output.contains(rebuildRestartYCodeSignal))
         {
-            qDebug() << "检测到 Agent 重启信号: SIGNAL:RESTART_AGENT";
+            qDebug() << "检测到 YCode 自更新信号:" << rebuildRestartYCodeSignal;
+
+            QString userOutput = output;
+            userOutput.replace(rebuildRestartYCodeSignal, "");
+            userOutput = userOutput.trimmed();
+            if (!userOutput.isEmpty())
+            {
+                emit outputReceived(userOutput);
+            }
+
+            emit ycodeSelfUpdateRequested();
+            return;
+        }
+
+        // ★ 检测重启信号
+        if (output.contains(restartAgentSignal))
+        {
+            qDebug() << "检测到 Agent 重启信号:" << restartAgentSignal;
             // 去掉信号标记，把剩余内容显示给用户
             QString userOutput = output;
-            userOutput.replace("SIGNAL:RESTART_AGENT", "");
+            userOutput.replace(restartAgentSignal, "");
             userOutput = userOutput.trimmed();
             if (!userOutput.isEmpty())
             {

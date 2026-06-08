@@ -21,6 +21,8 @@ const int MAX_TOOL_ITERATIONS = 10;
 const int API_MAX_RETRIES = 3;
 const double DEFAULT_TEMPERATURE = 0.8;
 const std::string SESSION_FILE = "agent_session.json";
+const std::string SIGNAL_RESTART_AGENT = "SIGNAL:RESTART_AGENT";
+const std::string SIGNAL_REBUILD_RESTART_YCODE = "SIGNAL:REBUILD_RESTART_YCODE";
 
 // ============================================================
 // HTTP 回调
@@ -173,11 +175,14 @@ std::string downloadFile(const std::string &url, const std::string &savePath)
 // ============================================================
 std::string restartAgent(bool standalone = false)
 {
-    if (!standalone)
+    const char *managed = std::getenv("YCODE_MANAGED");
+    bool managedByYCode = !standalone && managed && std::string(managed) == "1";
+
+    if (managedByYCode)
     {
         // 由 YCode 客户端托管：发送重启信号，让 YCode 来重启 agent
         std::cout << "\n  [Agent 请求 YCode 客户端执行重启...]" << std::endl;
-        std::cout << "SIGNAL:RESTART_AGENT" << std::endl;
+        std::cout << SIGNAL_RESTART_AGENT << std::endl;
         // 保存会话后再退出
         exit(0);
         return "OK 重启信号已发送";  // 不会执行到这里
@@ -213,6 +218,35 @@ std::string restartAgent(bool standalone = false)
     ShellExecuteA(NULL, "open", batPath.c_str(), NULL, exeDir.c_str(), SW_HIDE);
     exit(0);
     return "OK 重启中...";  // 实际上不会执行到这里
+}
+
+std::string requestYCodeRebuildAndRestart()
+{
+    const char *managed = std::getenv("YCODE_MANAGED");
+    if (managed && std::string(managed) == "1")
+    {
+        std::cout << "\n  [Agent 请求 YCode 执行完整自更新：重建 Agent、客户端并更新快捷方式...]" << std::endl;
+        std::cout << SIGNAL_REBUILD_RESTART_YCODE << std::endl;
+        exit(0);
+        return "OK YCode 自更新信号已发送";
+    }
+
+    char exePath[MAX_PATH];
+    DWORD len = GetModuleFileNameA(NULL, exePath, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH)
+        return "FAIL: 无法获取当前程序路径";
+
+    std::string fullPath(exePath);
+    size_t lastSlash = fullPath.find_last_of("\\/");
+    std::string exeDir = (lastSlash != std::string::npos) ? fullPath.substr(0, lastSlash) : ".";
+    std::string scriptPath = exeDir + "\\ycode_self_update.bat";
+
+    if (GetFileAttributesA(scriptPath.c_str()) == INVALID_FILE_ATTRIBUTES)
+        return "FAIL: 找不到自更新脚本 " + scriptPath;
+
+    ShellExecuteA(NULL, "open", scriptPath.c_str(), NULL, exeDir.c_str(), SW_HIDE);
+    exit(0);
+    return "OK YCode 自更新脚本已启动";
 }
 
 // ============================================================
@@ -329,6 +363,10 @@ private:
             json::object({}),
             json::array()));
 
+        tools.push_back(makeTool("rebuild_and_restart_ycode", "修改 YCode 自身文件后执行完整自更新：重建 agent.exe、重建 Qt 客户端、更新桌面快捷方式，并重启整个 YCode。",
+            json::object({}),
+            json::array()));
+
         return tools;
     }
 
@@ -379,6 +417,10 @@ private:
         if (toolName == "restart_agent")
         {
             return restartAgent(false);  // 托管模式：发送信号给 YCode
+        }
+        if (toolName == "rebuild_and_restart_ycode")
+        {
+            return requestYCodeRebuildAndRestart();
         }
         return "未知工具: " + toolName;
     }
@@ -514,10 +556,10 @@ public:
     std::string getSystemPrompt()
     {
         return std::string("你是 YCode Agent v2.0，运行在 Yiyangzai 自制的编程工具中。") +
-               "你有12个工具: read_file, write_file, list_directory, execute_command, " +
-               "search_files, search_content, create_directory, delete_file, move_file, get_file_info, download_file, restart_agent。 " +
+               "你有13个工具: read_file, write_file, list_directory, execute_command, " +
+               "search_files, search_content, create_directory, delete_file, move_file, get_file_info, download_file, restart_agent, rebuild_and_restart_ycode。 " +
                "修改代码前先读取原文件，用write_file写入完整内容。用中文回答，自信幽默。" +
-               "restart_agent 用于重启当前 agent 进程，调用前建议先保存会话。";
+               "只需要重启 Agent 时调用 restart_agent；修改 agent.cpp、YZCodex 客户端、启动脚本或快捷方式后，调用 rebuild_and_restart_ycode 让整套 YCode 重建并重启。";
     }
 
     void trimHistory(std::vector<json> &history)
@@ -603,7 +645,7 @@ int main(int argc, char *argv[])
     std::string input;
     std::vector<json> conversationHistory;
 
-    std::cout << "\n命令: /exit /clear /save /load /restart /temp 0.5 /model name /help" << std::endl;
+    std::cout << "\n命令: /exit /clear /save /load /restart /self-update /temp 0.5 /model name /help" << std::endl;
     std::cout << "----------------------------------------" << std::endl;
 
     while (true)
@@ -639,6 +681,18 @@ int main(int argc, char *argv[])
             continue;
         }
 
+        if (input == "/self-update" || input == "/rebuild-restart")
+        {
+            if (!conversationHistory.empty())
+            {
+                agent.saveSession(conversationHistory);
+                std::cout << "会话已保存。" << std::endl;
+            }
+            std::cout << "正在请求 YCode 完整自更新..." << std::endl;
+            requestYCodeRebuildAndRestart();
+            continue;
+        }
+
         if (input == "/save") { agent.saveSession(conversationHistory); std::cout << "已保存" << std::endl; continue; }
         if (input == "/load") { conversationHistory = agent.loadSession(); continue; }
 
@@ -650,7 +704,7 @@ int main(int argc, char *argv[])
         }
 
         if (input.substr(0, 7) == "/model ") { agent.setModel(input.substr(7)); continue; }
-        if (input == "/help") { std::cout << "YCode Agent v2.0 - 12个工具的全能编程助手 | /restart 重启" << std::endl; continue; }
+        if (input == "/help") { std::cout << "YCode Agent v2.0 - 13个工具的全能编程助手 | /restart 重启 Agent | /self-update 重建并重启 YCode" << std::endl; continue; }
         if (input.empty()) continue;
 
         std::cout << "Agent: " << std::flush;

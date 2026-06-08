@@ -48,6 +48,12 @@ set DEEPSEEK_API_KEY=your-api-key-here
 
 不要把真实 API Key、会话文件或本地构建产物提交到仓库。
 
+## 自更新
+
+YCode Agent 修改自身源码、Qt 客户端源码、启动脚本或快捷方式配置后，可以调用 `rebuild_and_restart_ycode` 工具触发完整自更新。客户端会退出，`ycode_self_update.bat` 会依次重建 `agent.exe`、重建 Qt 客户端、更新桌面快捷方式，然后重新启动 YCode。
+
+只需要重启 Agent 进程时，调用 `restart_agent` 即可。
+
 ## 许可证
 
 本项目使用 MIT License，详见 [LICENSE](LICENSE)。

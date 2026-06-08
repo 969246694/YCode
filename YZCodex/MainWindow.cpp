@@ -18,12 +18,14 @@
 #include <QShortcut>
 #include <QInputDialog>
 #include <QApplication>
+#include <QMenuBar>
 #include <QScrollBar>
 #include <QTextBlock>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QRegularExpression>
 #include <QDebug>
+#include <QTimer>
 
 // ============================================================
 // 构造函数 & 析构函数
@@ -33,6 +35,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       agentManager(nullptr),
       showBottomPanel(true),
+      selfUpdateInProgress(false),
       currentActivity(0)
 {
     setWindowIcon(QIcon("F:/YiyangzaiCode/YCode.ico"));
@@ -83,6 +86,7 @@ void MainWindow::connectAgentSignals()
     connect(agentManager, &AgentManager::errorOccurred, this, &MainWindow::onAgentError);
     connect(agentManager, &AgentManager::statusChanged, this, &MainWindow::onAgentStatusChanged);
     connect(agentManager, &AgentManager::agentRestarting, this, &MainWindow::onAgentRestarting);
+    connect(agentManager, &AgentManager::ycodeSelfUpdateRequested, this, &MainWindow::onYCodeSelfUpdateRequested);
 }
 
 // ============================================================
@@ -1293,6 +1297,43 @@ void MainWindow::onAgentRestarting()
     statusMessage->setText("Agent 重启中...");
 }
 
+void MainWindow::onYCodeSelfUpdateRequested()
+{
+    appendToChat("YCode 将退出并执行完整自更新：重建 Agent、重建客户端、更新快捷方式，然后重新启动。", false);
+    statusMessage->setText("YCode 自更新准备中...");
+
+    if (!saveAllModifiedFilesForSelfUpdate())
+        return;
+
+    QString updaterPath = QDir(currentProjectPath).filePath("ycode_self_update.bat");
+    if (!QFile::exists(updaterPath))
+    {
+        appendToChat("错误: 找不到自更新脚本 " + updaterPath, false);
+        statusMessage->setText("YCode 自更新失败");
+        return;
+    }
+
+    saveSettings();
+
+    if (agentManager)
+        agentManager->stop();
+
+    QString command = "\"" + QDir::toNativeSeparators(updaterPath) + "\"";
+    bool started = QProcess::startDetached("cmd.exe", QStringList() << "/c" << command, currentProjectPath);
+    if (!started)
+    {
+        appendToChat("错误: 无法启动自更新脚本 " + updaterPath, false);
+        statusMessage->setText("YCode 自更新失败");
+        if (agentManager && !apiKey.isEmpty())
+            agentManager->start();
+        return;
+    }
+
+    selfUpdateInProgress = true;
+    statusMessage->setText("YCode 正在退出以完成自更新...");
+    QTimer::singleShot(200, qApp, &QApplication::quit);
+}
+
 // ============================================================
 // 编辑器光标变化
 // ============================================================
@@ -1357,6 +1398,38 @@ void MainWindow::saveSettings()
     settings.setValue("windowState", saveState());
 }
 
+bool MainWindow::saveAllModifiedFilesForSelfUpdate()
+{
+    for (int i = 0; i < editorTabs->count(); ++i)
+    {
+        CodeEditor *editor = qobject_cast<CodeEditor *>(editorTabs->widget(i));
+        if (!editor || !editor->isModified())
+            continue;
+
+        QString filePath = editor->filePath();
+        if (filePath.isEmpty())
+        {
+            appendToChat(QString("YCode 自更新已取消：文件 \"%1\" 尚未保存，请先保存或关闭该标签页。").arg(editorTabs->tabText(i)), false);
+            statusMessage->setText("YCode 自更新已取消");
+            return false;
+        }
+
+        QFile file(filePath);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        {
+            appendToChat("YCode 自更新已取消：无法保存文件 " + filePath, false);
+            statusMessage->setText("YCode 自更新已取消");
+            return false;
+        }
+
+        file.write(editor->toPlainText().toUtf8());
+        file.close();
+        editor->setModified(false);
+    }
+
+    return true;
+}
+
 void MainWindow::updateFileTree(const QString &path)
 {
     if (fileSystemModel)
@@ -1372,23 +1445,26 @@ void MainWindow::updateFileTree(const QString &path)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // 保存所有未保存的文件
-    for (int i = 0; i < editorTabs->count(); ++i)
+    if (!selfUpdateInProgress)
     {
-        CodeEditor *editor = qobject_cast<CodeEditor *>(editorTabs->widget(i));
-        if (editor && editor->isModified())
+        // 保存所有未保存的文件
+        for (int i = 0; i < editorTabs->count(); ++i)
         {
-            QMessageBox::StandardButton result = QMessageBox::question(
-                this, "保存文件",
-                QString("文件 \"%1\" 已修改，是否保存？").arg(editorTabs->tabText(i)),
-                QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
-            if (result == QMessageBox::Save)
-                saveFile();
-            else if (result == QMessageBox::Cancel)
+            CodeEditor *editor = qobject_cast<CodeEditor *>(editorTabs->widget(i));
+            if (editor && editor->isModified())
             {
-                event->ignore();
-                return;
+                QMessageBox::StandardButton result = QMessageBox::question(
+                    this, "保存文件",
+                    QString("文件 \"%1\" 已修改，是否保存？").arg(editorTabs->tabText(i)),
+                    QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+                if (result == QMessageBox::Save)
+                    saveFile();
+                else if (result == QMessageBox::Cancel)
+                {
+                    event->ignore();
+                    return;
+                }
             }
         }
     }
