@@ -9,6 +9,8 @@
 #include <thread>
 #include <chrono>
 #include <ctime>
+#include <algorithm>
+#include <cctype>
 #include <sys/stat.h>
 #include "curl/curl.h"
 #include "nlohmann/json.hpp"
@@ -23,6 +25,7 @@ const double DEFAULT_TEMPERATURE = 0.8;
 const std::string SESSION_FILE = "agent_session.json";
 const std::string SIGNAL_RESTART_AGENT = "SIGNAL:RESTART_AGENT";
 const std::string SIGNAL_REBUILD_RESTART_YCODE = "SIGNAL:REBUILD_RESTART_YCODE";
+const std::string SIGNAL_RELOAD_STYLE = "SIGNAL:RELOAD_STYLE";
 
 // ============================================================
 // HTTP 回调
@@ -283,6 +286,180 @@ private:
     std::string modelName = "deepseek-v4-pro";
     double temperature = DEFAULT_TEMPERATURE;
     std::string projectPath;
+    std::vector<std::string> changedPaths;
+
+    static std::string toLower(std::string value)
+    {
+        std::transform(value.begin(), value.end(), value.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return value;
+    }
+
+    static bool startsWith(const std::string &value, const std::string &prefix)
+    {
+        return value.rfind(prefix, 0) == 0;
+    }
+
+    static bool endsWith(const std::string &value, const std::string &suffix)
+    {
+        return value.size() >= suffix.size() &&
+               value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+
+    static bool hasAnySuffix(const std::string &value, const std::vector<std::string> &suffixes)
+    {
+        for (const std::string &suffix : suffixes)
+        {
+            if (endsWith(value, suffix))
+                return true;
+        }
+        return false;
+    }
+
+    static std::string absoluteWindowsPath(const std::string &path)
+    {
+        char buffer[MAX_PATH];
+        DWORD len = GetFullPathNameA(path.c_str(), MAX_PATH, buffer, nullptr);
+        if (len == 0 || len >= MAX_PATH)
+            return path;
+        return std::string(buffer);
+    }
+
+    std::string normalizeChangedPath(const std::string &path) const
+    {
+        std::string normalized = absoluteWindowsPath(path);
+        std::replace(normalized.begin(), normalized.end(), '\\', '/');
+
+        std::string root = absoluteWindowsPath(projectPath.empty() ? "." : projectPath);
+        std::replace(root.begin(), root.end(), '\\', '/');
+
+        std::string normalizedLower = toLower(normalized);
+        std::string rootLower = toLower(root);
+        if (!rootLower.empty() && rootLower != "." && startsWith(normalizedLower, rootLower + "/"))
+            normalized = normalized.substr(root.size() + 1);
+
+        while (startsWith(normalized, "./"))
+            normalized = normalized.substr(2);
+
+        return normalized;
+    }
+
+    void recordChangedPath(const std::string &path)
+    {
+        std::string normalized = normalizeChangedPath(path);
+        if (normalized.empty())
+            return;
+
+        if (std::find(changedPaths.begin(), changedPaths.end(), normalized) == changedPaths.end())
+            changedPaths.push_back(normalized);
+    }
+
+    bool isStyleReloadPath(const std::string &path) const
+    {
+        std::string lower = toLower(normalizeChangedPath(path));
+        return lower == "yzcodex/resources/style.qss" ||
+               lower == "resources/style.qss" ||
+               endsWith(lower, "/yzcodex/resources/style.qss");
+    }
+
+    bool requiresFullYCodeRebuild(const std::string &path) const
+    {
+        std::string lower = toLower(normalizeChangedPath(path));
+
+        if (lower == "agent.cpp" || lower == "build.bat" ||
+            lower == "run_ycode.bat" || lower == "ycode_self_update.bat" ||
+            lower == "update_shortcut.ps1" || lower == "manage_api_key.ps1" ||
+            lower == "set_api_key_system.bat" || lower == "upgrade_agent.bat" ||
+            lower == "ycode.ico")
+        {
+            return true;
+        }
+
+        if (startsWith(lower, "yzcodex/"))
+        {
+            if (lower == "yzcodex/cmakelists.txt" ||
+                lower == "yzcodex/cmakepresets.json" ||
+                lower == "yzcodex/ycode.rc" ||
+                lower == "yzcodex/ycode.rc.in" ||
+                lower == "yzcodex/resources/icon.ico")
+            {
+                return true;
+            }
+
+            return hasAnySuffix(lower, {".cpp", ".h", ".hpp", ".c", ".cc", ".cxx"});
+        }
+
+        if (startsWith(lower, "ycodeengine/"))
+        {
+            if (lower == "ycodeengine/cmakelists.txt" ||
+                lower == "ycodeengine/build.bat")
+            {
+                return true;
+            }
+
+            return hasAnySuffix(lower, {".cpp", ".h", ".hpp", ".c", ".cc", ".cxx"});
+        }
+
+        return false;
+    }
+
+    std::string joinPaths(const std::vector<std::string> &paths) const
+    {
+        std::ostringstream out;
+        for (size_t i = 0; i < paths.size(); ++i)
+        {
+            if (i > 0)
+                out << ", ";
+            out << paths[i];
+        }
+        return out.str();
+    }
+
+    std::string applySelfChanges(const json &args)
+    {
+        if (args.contains("paths") && args["paths"].is_array())
+        {
+            for (const auto &path : args["paths"])
+            {
+                if (path.is_string())
+                    recordChangedPath(path.get<std::string>());
+            }
+        }
+
+        if (changedPaths.empty())
+        {
+            return "没有记录到需要应用的自修改路径。若你通过 execute_command 修改了文件，请把路径传给 apply_self_changes 的 paths 参数。";
+        }
+
+        bool needsFullRebuild = false;
+        bool needsStyleReload = false;
+        for (const std::string &path : changedPaths)
+        {
+            if (requiresFullYCodeRebuild(path))
+                needsFullRebuild = true;
+            if (isStyleReloadPath(path))
+                needsStyleReload = true;
+        }
+
+        std::string summary = joinPaths(changedPaths);
+        if (needsFullRebuild)
+        {
+            std::cout << "\n  [检测到 YCode 自身源码/构建链路变更: " << summary << "]" << std::endl;
+            std::cout << "  [将请求客户端执行完整自重建并重启。]" << std::endl;
+            return requestYCodeRebuildAndRestart();
+        }
+
+        if (needsStyleReload)
+        {
+            std::cout << "\n  [检测到样式变更，正在请求客户端热加载样式...]" << std::endl;
+            std::cout << SIGNAL_RELOAD_STYLE << std::endl;
+            changedPaths.clear();
+            return "OK 已请求 YCode 热加载样式: " + summary;
+        }
+
+        changedPaths.clear();
+        return "变更已记录，但不影响当前运行程序，无需重建或热加载: " + summary;
+    }
 
     json getTools()
     {
@@ -367,6 +544,14 @@ private:
             json::object({}),
             json::array()));
 
+        json changedPathsProp;
+        changedPathsProp["type"] = "array";
+        changedPathsProp["description"] = "可选。通过 execute_command 等非文件工具改动过的路径列表。write_file、move_file、delete_file、download_file 会自动记录。";
+        changedPathsProp["items"]["type"] = "string";
+        tools.push_back(makeTool("apply_self_changes", "根据本轮已修改路径自动应用 YCode 自身变化：样式文件热加载；C++/CMake/脚本/图标等自身代码变化触发完整重建并重启。",
+            json::object({{"paths", changedPathsProp}}),
+            json::array()));
+
         return tools;
     }
 
@@ -376,9 +561,13 @@ private:
             return readFile(args["filepath"]);
         if (toolName == "write_file")
         {
-            if (writeFile(args["filepath"], args["content"]))
-                return "OK 写入: " + std::string(args["filepath"]);
-            return "FAIL 写入: " + std::string(args["filepath"]);
+            std::string filepath = args["filepath"].get<std::string>();
+            if (writeFile(filepath, args["content"].get<std::string>()))
+            {
+                recordChangedPath(filepath);
+                return "OK 写入: " + filepath;
+            }
+            return "FAIL 写入: " + filepath;
         }
         if (toolName == "list_directory")
         {
@@ -402,17 +591,43 @@ private:
             return searchContent(args["text"], args["filePattern"], dir);
         }
         if (toolName == "create_directory")
-            return createDirectory(args["path"]);
+        {
+            std::string path = args["path"].get<std::string>();
+            std::string result = createDirectory(path);
+            if (startsWith(result, "OK"))
+                recordChangedPath(path);
+            return result;
+        }
         if (toolName == "delete_file")
-            return deleteFile(args["path"]);
+        {
+            std::string path = args["path"].get<std::string>();
+            std::string result = deleteFile(path);
+            if (startsWith(result, "OK"))
+                recordChangedPath(path);
+            return result;
+        }
         if (toolName == "move_file")
-            return moveFile(args["source"], args["destination"]);
+        {
+            std::string source = args["source"].get<std::string>();
+            std::string destination = args["destination"].get<std::string>();
+            std::string result = moveFile(source, destination);
+            if (startsWith(result, "OK"))
+            {
+                recordChangedPath(source);
+                recordChangedPath(destination);
+            }
+            return result;
+        }
         if (toolName == "get_file_info")
             return getFileInfo(args["path"]);
         if (toolName == "download_file")
         {
             std::cout << "\n  [下载: " << args["url"].get<std::string>() << "]" << std::endl;
-            return downloadFile(args["url"], args["savePath"]);
+            std::string savePath = args["savePath"].get<std::string>();
+            std::string result = downloadFile(args["url"].get<std::string>(), savePath);
+            if (startsWith(result, "OK"))
+                recordChangedPath(savePath);
+            return result;
         }
         if (toolName == "restart_agent")
         {
@@ -421,6 +636,10 @@ private:
         if (toolName == "rebuild_and_restart_ycode")
         {
             return requestYCodeRebuildAndRestart();
+        }
+        if (toolName == "apply_self_changes")
+        {
+            return applySelfChanges(args);
         }
         return "未知工具: " + toolName;
     }
@@ -556,10 +775,12 @@ public:
     std::string getSystemPrompt()
     {
         return std::string("你是 YCode Agent v2.0，运行在 Yiyangzai 自制的编程工具中。") +
-               "你有13个工具: read_file, write_file, list_directory, execute_command, " +
-               "search_files, search_content, create_directory, delete_file, move_file, get_file_info, download_file, restart_agent, rebuild_and_restart_ycode。 " +
+               "你有14个工具: read_file, write_file, list_directory, execute_command, " +
+               "search_files, search_content, create_directory, delete_file, move_file, get_file_info, download_file, restart_agent, rebuild_and_restart_ycode, apply_self_changes。 " +
+               "YCode 已内置 YCodeEngine，具备 C++17 游戏引擎、事件总线、插件 ABI、游戏项目模板和构建工作流。"
                "修改代码前先读取原文件，用write_file写入完整内容。用中文回答，自信幽默。" +
-               "只需要重启 Agent 时调用 restart_agent；修改 agent.cpp、YZCodex 客户端、启动脚本或快捷方式后，调用 rebuild_and_restart_ycode 让整套 YCode 重建并重启。";
+               "凡是修改了 YCode 自身文件，改完后必须调用 apply_self_changes；它会根据路径自动选择热加载、重建或重启。"
+               "只有用户明确要求立即重启 Agent 时才直接调用 restart_agent；不要在改完源码后只回复完成。";
     }
 
     void trimHistory(std::vector<json> &history)
@@ -614,7 +835,7 @@ int main(int argc, char *argv[])
 
     std::cout << "========================================" << std::endl;
     std::cout << "  YCode Agent v2.0 - 世界征服版" << std::endl;
-    std::cout << "  12个工具 | API重试 | 会话持久化 | 自重启" << std::endl;
+    std::cout << "  14个工具 | API重试 | 会话持久化 | 自进化分派" << std::endl;
     std::cout << "========================================" << std::endl;
 
     std::string apiKey;
@@ -645,7 +866,7 @@ int main(int argc, char *argv[])
     std::string input;
     std::vector<json> conversationHistory;
 
-    std::cout << "\n命令: /exit /clear /save /load /restart /self-update /temp 0.5 /model name /help" << std::endl;
+    std::cout << "\n命令: /exit /clear /save /load /restart /self-update /apply-self-changes /temp 0.5 /model name /help" << std::endl;
     std::cout << "----------------------------------------" << std::endl;
 
     while (true)
@@ -693,6 +914,12 @@ int main(int argc, char *argv[])
             continue;
         }
 
+        if (input == "/apply-self-changes")
+        {
+            std::cout << agent.chat("请调用 apply_self_changes 应用已记录的 YCode 自身变更。", conversationHistory) << std::endl;
+            continue;
+        }
+
         if (input == "/save") { agent.saveSession(conversationHistory); std::cout << "已保存" << std::endl; continue; }
         if (input == "/load") { conversationHistory = agent.loadSession(); continue; }
 
@@ -704,7 +931,7 @@ int main(int argc, char *argv[])
         }
 
         if (input.substr(0, 7) == "/model ") { agent.setModel(input.substr(7)); continue; }
-        if (input == "/help") { std::cout << "YCode Agent v2.0 - 13个工具的全能编程助手 | /restart 重启 Agent | /self-update 重建并重启 YCode" << std::endl; continue; }
+        if (input == "/help") { std::cout << "YCode Agent v2.0 - 14个工具的全能编程助手 | apply_self_changes 会按路径热加载、重建或重启 | /restart 重启 Agent | /self-update 重建并重启 YCode" << std::endl; continue; }
         if (input.empty()) continue;
 
         std::cout << "Agent: " << std::flush;

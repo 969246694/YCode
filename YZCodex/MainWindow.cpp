@@ -27,6 +27,7 @@
 #include <QRegularExpression>
 #include <QDebug>
 #include <QTimer>
+#include <QProcessEnvironment>
 
 // ============================================================
 // 构造函数 & 析构函数
@@ -57,6 +58,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupMenuBar();
     setupCommandPalette();
     loadSettings();
+    reloadStyleSheet(false);
 
     setWindowTitle("YCode - AI 编程助手");
     setMinimumSize(1200, 800);
@@ -90,6 +92,7 @@ void MainWindow::connectAgentSignals()
     connect(agentManager, &AgentManager::statusChanged, this, &MainWindow::onAgentStatusChanged);
     connect(agentManager, &AgentManager::agentRestarting, this, &MainWindow::onAgentRestarting);
     connect(agentManager, &AgentManager::ycodeSelfUpdateRequested, this, &MainWindow::onYCodeSelfUpdateRequested);
+    connect(agentManager, &AgentManager::reloadStyleRequested, this, &MainWindow::onReloadStyleRequested);
 }
 
 // ============================================================
@@ -420,11 +423,12 @@ void MainWindow::setupFileExplorer()
     fileSystemModel->setFilter(QDir::NoDot | QDir::AllDirs | QDir::Files);
     fileSystemModel->setNameFilters(QStringList()
                                     << "*.cpp" << "*.h" << "*.hpp" << "*.c"
-                                    << "*.py" << "*.js" << "*.ts"
-                                    << "*.txt" << "*.md" << "*.json" << "*.xml"
+                                    << "*.py" << "*.js" << "*.ts" << "*.lua"
+                                    << "*.txt" << "*.md" << "*.json" << "*.xml" << "*.yaml" << "*.yml"
                                     << "*.cmake" << "*.bat" << "*.sh"
                                     << "*.ui" << "*.qrc" << "*.pro" << "*.pri"
-                                    << "*.rc" << "*.ico" << "*.png");
+                                    << "*.rc" << "*.ico" << "*.png" << "*.jpg" << "*.jpeg"
+                                    << "*.glsl" << "*.vert" << "*.frag" << "*.hlsl" << "*.ycode");
     fileSystemModel->setNameFilterDisables(false);
 
     fileTreeView = new QTreeView();
@@ -779,6 +783,14 @@ void MainWindow::setupMenuBar()
         else if (cmd == "new file") newFile();
         else if (cmd == "open file") openFile();
         else statusMessage->setText("未知命令: " + cmd); }, QKeySequence("Ctrl+Shift+P"));
+
+    // 游戏开发菜单
+    QMenu *gameMenu = menuBar->addMenu("游戏开发(&G)");
+    gameMenu->addAction("🎮 新建 YCode 游戏项目...", this, &MainWindow::createGameProject);
+    gameMenu->addAction("🛠 构建 YCode Engine", this, &MainWindow::buildYCodeEngine);
+    gameMenu->addAction("📂 打开引擎源码目录", this, &MainWindow::openYCodeEngineFolder);
+    gameMenu->addSeparator();
+    gameMenu->addAction("🤖 启动 AI 游戏开发模式", this, &MainWindow::sendGameDevPrompt);
 
     // 设置菜单
     QMenu *settingsMenu = menuBar->addMenu("设置(&S)");
@@ -1275,6 +1287,185 @@ void MainWindow::clearChat()
 }
 
 // ============================================================
+// 游戏开发功能
+// ============================================================
+
+void MainWindow::createGameProject()
+{
+    QString parentDir = QFileDialog::getExistingDirectory(this, "选择游戏项目父目录", currentProjectPath);
+    if (parentDir.isEmpty())
+        return;
+
+    bool ok = false;
+    QString projectName = QInputDialog::getText(this, "新建 YCode 游戏项目",
+                                                "项目名称:", QLineEdit::Normal,
+                                                "YCodeGame", &ok).trimmed();
+    if (!ok || projectName.isEmpty())
+        return;
+
+    QString safeName = projectName;
+    safeName.replace(QRegularExpression("[^A-Za-z0-9_]"), "_");
+    if (safeName.at(0).isDigit())
+        safeName.prepend("Game_");
+
+    QString projectDir = QDir(parentDir).filePath(safeName);
+    if (QDir(projectDir).exists())
+    {
+        QMessageBox::warning(this, "项目已存在", "目录已存在: " + projectDir);
+        return;
+    }
+
+    QDir dir;
+    if (!dir.mkpath(QDir(projectDir).filePath("src")) ||
+        !dir.mkpath(QDir(projectDir).filePath("assets")) ||
+        !dir.mkpath(QDir(projectDir).filePath("plugins")))
+    {
+        QMessageBox::warning(this, "创建失败", "无法创建项目目录: " + projectDir);
+        return;
+    }
+
+    QString enginePath = QDir::fromNativeSeparators(ycodeEnginePath());
+    QString cmake = QString(
+R"(cmake_minimum_required(VERSION 3.20)
+project(%1 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory("%2" ycode_engine_build)
+
+add_executable(%1
+    src/main.cpp
+)
+
+target_link_libraries(%1 PRIVATE ycode_engine)
+)").arg(safeName, enginePath);
+
+    QString mainCpp = QString(
+R"(#include <ycode/core.h>
+
+#include <iostream>
+
+int main()
+{
+    ycode::Engine engine({ "%1", "plugins", 60 });
+    engine.events().subscribe("*", [](const ycode::Event& event) {
+        std::cout << "[event] " << event.type << std::endl;
+    });
+
+    std::string error;
+    if (!engine.initialize(&error))
+    {
+        std::cerr << "Failed to initialize YCode Engine: " << error << std::endl;
+        return 1;
+    }
+
+    for (int i = 0; i < 3; ++i)
+        engine.tick();
+
+    engine.shutdown();
+    return 0;
+}
+)").arg(safeName);
+
+    QString readme = QString(
+R"(# %1
+
+This is a YCode game project powered by the built-in YCode Engine.
+
+## Build
+
+```bat
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+```
+)").arg(safeName);
+
+    if (!writeTextFile(QDir(projectDir).filePath("CMakeLists.txt"), cmake) ||
+        !writeTextFile(QDir(projectDir).filePath("src/main.cpp"), mainCpp) ||
+        !writeTextFile(QDir(projectDir).filePath("README.md"), readme) ||
+        !writeTextFile(QDir(projectDir).filePath("assets/.gitkeep"), "") ||
+        !writeTextFile(QDir(projectDir).filePath("plugins/.gitkeep"), ""))
+    {
+        QMessageBox::warning(this, "创建失败", "项目文件写入失败: " + projectDir);
+        return;
+    }
+
+    QFile mainFile(QDir(projectDir).filePath("src/main.cpp"));
+    if (mainFile.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        CodeEditor *editor = new CodeEditor();
+        editor->setPlainText(QString::fromUtf8(mainFile.readAll()));
+        editor->setFilePath(mainFile.fileName());
+        int index = editorTabs->addTab(editor, "main.cpp");
+        editorTabs->setCurrentIndex(index);
+    }
+
+    appendToChat("已创建 YCode 游戏项目: " + projectDir, false);
+    statusMessage->setText("游戏项目已创建");
+}
+
+void MainWindow::buildYCodeEngine()
+{
+    QString engineDir = ycodeEnginePath();
+    QString scriptPath = QDir(engineDir).filePath("build.bat");
+    if (!QFileInfo::exists(scriptPath))
+    {
+        QMessageBox::warning(this, "构建失败", "找不到构建脚本: " + scriptPath);
+        return;
+    }
+
+    bottomPanel->setVisible(true);
+    showBottomPanel = true;
+    bottomTabs->setCurrentIndex(0);
+    terminalOutput->appendPlainText("== Building YCode Engine ==");
+
+    QProcess *process = new QProcess(this);
+    process->setWorkingDirectory(engineDir);
+    process->setProcessChannelMode(QProcess::MergedChannels);
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("YCODE_NONINTERACTIVE", "1");
+    process->setProcessEnvironment(env);
+
+    connect(process, &QProcess::readyReadStandardOutput, this, [this, process]() {
+        terminalOutput->appendPlainText(QString::fromLocal8Bit(process->readAllStandardOutput()));
+    });
+    connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, process](int exitCode, QProcess::ExitStatus exitStatus) {
+        terminalOutput->appendPlainText(QString("== YCode Engine build finished: exit %1 ==").arg(exitCode));
+        statusMessage->setText(exitStatus == QProcess::NormalExit && exitCode == 0
+                                   ? "YCode Engine 构建成功"
+                                   : "YCode Engine 构建失败");
+        process->deleteLater();
+    });
+
+    process->start("cmd.exe", QStringList() << "/c" << QDir::toNativeSeparators(scriptPath));
+    if (!process->waitForStarted(3000))
+    {
+        terminalOutput->appendPlainText("Failed to start YCode Engine build.");
+        statusMessage->setText("YCode Engine 构建失败");
+        process->deleteLater();
+    }
+}
+
+void MainWindow::openYCodeEngineFolder()
+{
+    QDesktopServices::openUrl(QUrl::fromLocalFile(ycodeEnginePath()));
+}
+
+void MainWindow::sendGameDevPrompt()
+{
+    QString prompt =
+        "进入 YCode 游戏开发模式。请基于内置 YCodeEngine 协助我设计、实现和调试游戏项目；"
+        "优先使用 YCodeEngine 的事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。";
+    inputField->setText(prompt);
+    sendMessage();
+}
+
+// ============================================================
 // Agent 回调
 // ============================================================
 
@@ -1307,6 +1498,11 @@ void MainWindow::onYCodeSelfUpdateRequested()
     appendToChat("YCode 将退出并执行完整自更新：重建 Agent、重建客户端、更新快捷方式，然后重新启动。", false);
     statusMessage->setText("YCode 自更新准备中...");
     startYCodeSelfUpdate();
+}
+
+void MainWindow::onReloadStyleRequested()
+{
+    reloadStyleSheet(true);
 }
 
 void MainWindow::checkForUpdates()
@@ -1514,6 +1710,69 @@ QString MainWindow::defaultIconPath() const
         return resourceIconPath;
 
     return QString();
+}
+
+QString MainWindow::ycodeEnginePath() const
+{
+    QDir currentRoot(currentProjectPath);
+    QString currentCandidate = currentRoot.filePath("YCodeEngine");
+    if (QFileInfo::exists(currentCandidate))
+        return QDir(currentCandidate).absolutePath();
+
+    QDir defaultRoot(defaultProjectPath());
+    QString defaultCandidate = defaultRoot.filePath("YCodeEngine");
+    if (QFileInfo::exists(defaultCandidate))
+        return QDir(defaultCandidate).absolutePath();
+
+    return QDir(currentProjectPath).filePath("YCodeEngine");
+}
+
+bool MainWindow::writeTextFile(const QString &filePath, const QString &content)
+{
+    QFileInfo info(filePath);
+    if (!info.absoluteDir().exists() && !info.absoluteDir().mkpath("."))
+        return false;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return false;
+
+    file.write(content.toUtf8());
+    file.close();
+    return true;
+}
+
+bool MainWindow::reloadStyleSheet(bool notifyUser)
+{
+    QString stylePath = QDir(currentProjectPath).filePath("YZCodex/resources/style.qss");
+    if (!QFileInfo::exists(stylePath))
+    {
+        if (notifyUser)
+        {
+            appendToChat("样式热加载失败：找不到 " + stylePath, false);
+            statusMessage->setText("样式热加载失败");
+        }
+        return false;
+    }
+
+    QFile styleFile(stylePath);
+    if (!styleFile.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        if (notifyUser)
+        {
+            appendToChat("样式热加载失败：无法读取 " + stylePath, false);
+            statusMessage->setText("样式热加载失败");
+        }
+        return false;
+    }
+
+    qApp->setStyleSheet(QString::fromUtf8(styleFile.readAll()));
+    if (notifyUser)
+    {
+        appendToChat("样式已热加载: " + stylePath, false);
+        statusMessage->setText("样式已热加载");
+    }
+    return true;
 }
 
 bool MainWindow::saveAllModifiedFilesForSelfUpdate()

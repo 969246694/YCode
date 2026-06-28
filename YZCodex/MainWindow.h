@@ -52,7 +52,12 @@ private slots:
     void onAgentStatusChanged(const QString &status);
     void onAgentRestarting();            // ★ 新增：agent 正在重启
     void onYCodeSelfUpdateRequested();
+    void onReloadStyleRequested();
     void checkForUpdates();
+    void createGameProject();
+    void buildYCodeEngine();
+    void openYCodeEngineFolder();
+    void sendGameDevPrompt();
 
     // 视图切换
     void showFileExplorer();
@@ -94,9 +99,12 @@ private:
     void connectAgentSignals();          // ★ 抽取：连接 AgentManager 信号
     bool saveAllModifiedFilesForSelfUpdate();
     bool startYCodeSelfUpdate(const QStringList &arguments = QStringList());
+    bool reloadStyleSheet(bool notifyUser = true);
+    bool writeTextFile(const QString &filePath, const QString &content);
     QString runGitCommand(const QStringList &arguments, int timeoutMs, bool *ok = nullptr);
     QString defaultProjectPath() const;
     QString defaultIconPath() const;
+    QString ycodeEnginePath() const;
 
     // ============ 布局组件 ============
     // 活动栏 (最左侧)

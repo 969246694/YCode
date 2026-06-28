@@ -165,6 +165,7 @@ void AgentManager::onReadyReadStandardOutput()
     {
         const QString restartAgentSignal = "SIGNAL:RESTART_AGENT";
         const QString rebuildRestartYCodeSignal = "SIGNAL:REBUILD_RESTART_YCODE";
+        const QString reloadStyleSignal = "SIGNAL:RELOAD_STYLE";
 
         if (output.contains(rebuildRestartYCodeSignal))
         {
@@ -179,6 +180,22 @@ void AgentManager::onReadyReadStandardOutput()
             }
 
             emit ycodeSelfUpdateRequested();
+            return;
+        }
+
+        if (output.contains(reloadStyleSignal))
+        {
+            qDebug() << "检测到样式热加载信号:" << reloadStyleSignal;
+
+            QString userOutput = output;
+            userOutput.replace(reloadStyleSignal, "");
+            userOutput = userOutput.trimmed();
+            if (!userOutput.isEmpty())
+            {
+                emit outputReceived(userOutput);
+            }
+
+            emit reloadStyleRequested();
             return;
         }
 

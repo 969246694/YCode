@@ -37,6 +37,12 @@ call :log Building agent.exe...
 call "%ROOT%\build.bat" >> "%LOG%" 2>&1
 if errorlevel 1 goto fail
 
+if exist "%ROOT%\YCodeEngine\build.bat" (
+    call :log Building YCode Engine...
+    call "%ROOT%\YCodeEngine\build.bat" >> "%LOG%" 2>&1
+    if errorlevel 1 goto fail
+)
+
 call :log Building YCode client...
 call "%ROOT%\YZCodex\build.bat" >> "%LOG%" 2>&1
 if errorlevel 1 goto fail

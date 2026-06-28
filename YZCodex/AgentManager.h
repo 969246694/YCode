@@ -26,6 +26,7 @@ signals:
     void statusChanged(const QString &status);
     void agentRestarting();        // ★ 新增：agent 正在重启信号
     void ycodeSelfUpdateRequested();
+    void reloadStyleRequested();
 
 private slots:
     void onReadyReadStandardOutput();

@@ -1,6 +1,6 @@
 # YZCodex - YCode Qt 客户端
 
-YZCodex 是 YCode 的 Windows Qt 图形客户端，提供多标签代码编辑器、文件树、终端面板、搜索替换和 DeepSeek Agent 对话界面。
+YZCodex 是 YCode 的 Windows Qt 图形客户端，提供多标签代码编辑器、文件树、终端面板、搜索替换、DeepSeek Agent 对话界面和 YCode Engine 游戏开发入口。
 
 ## 依赖
 
@@ -37,6 +37,15 @@ build.bat
 ```text
 build\msvc2022_64\Release\YCode.exe
 ```
+
+## 游戏开发入口
+
+菜单 `游戏开发` 提供：
+
+- 新建 YCode 游戏项目
+- 构建 YCode Engine
+- 打开引擎源码目录
+- 启动 AI 游戏开发模式
 
 ## 配置
 
