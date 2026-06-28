@@ -3,6 +3,7 @@
 
 #include "ycode/event_bus.h"
 #include "ycode/plugin_loader.h"
+#include "ycode/scene.h"
 #include "ycode/version.h"
 #include "ycode/window.h"
 
@@ -36,6 +37,8 @@ public:
     const EventBus& events() const;
     PluginLoader& plugins();
     const PluginLoader& plugins() const;
+    Scene& scene();
+    const Scene& scene() const;
     Window& window();
     const Window& window() const;
 
@@ -43,6 +46,7 @@ private:
     EngineConfig config_;
     EventBus eventBus_;
     PluginLoader pluginLoader_;
+    Scene scene_;
     Window window_;
     bool running_ = false;
     std::chrono::steady_clock::time_point lastTick_;

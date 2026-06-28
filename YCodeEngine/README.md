@@ -6,6 +6,7 @@ It replaces the old standalone `YiyangzaiEngine` direction with a YCode-owned su
 
 - Small C++17 core
 - Event bus
+- Scene, entity, and transform model
 - Minimal native window layer
 - Stable C ABI plugin contract
 - Cross-platform dynamic plugin loader
@@ -28,6 +29,7 @@ build\msvc2022_64\Release\ycode_engine_launcher.exe
 ## Architecture
 
 - `include/ycode/engine.h`: engine lifecycle
+- `include/ycode/scene.h`: scene, entity, and 2D transform model
 - `include/ycode/event_bus.h`: publish/subscribe event bus
 - `include/ycode/window.h`: native window abstraction
 - `include/ycode/plugin.h`: plugin ABI

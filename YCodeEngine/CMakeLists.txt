@@ -8,6 +8,7 @@ add_library(ycode_engine STATIC
     src/engine.cpp
     src/event_bus.cpp
     src/plugin_loader.cpp
+    src/scene.cpp
 )
 
 if(WIN32)

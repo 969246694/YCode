@@ -18,6 +18,21 @@ int main()
     config.window.height = 720;
 
     ycode::Engine engine(config);
+    auto& player = engine.scene().createEntity("Sandbox Player");
+    player.transform.position = ycode::Vec2{0.0f, 0.0f};
+    player.properties["kind"] = "prototype";
+    ycode::EntityId playerId = player.id;
+
+    engine.scene().setUpdateHandler([playerId](ycode::Scene& scene, float deltaSeconds) {
+        auto* entity = scene.findEntity(playerId);
+        if (!entity || !entity->active)
+            return;
+
+        entity->transform.position.x += 64.0f * deltaSeconds;
+        if (entity->transform.position.x > 320.0f)
+            entity->transform.position.x = 0.0f;
+    });
+
     engine.events().subscribe("*", [](const ycode::Event& event) {
         if (event.type == "engine.tick")
             return;
@@ -36,6 +51,9 @@ int main()
         engine.tick();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
+
+    if (auto* entity = engine.scene().findEntity(playerId))
+        std::cout << "Sandbox Player x=" << entity->transform.position.x << std::endl;
 
     engine.shutdown();
     return 0;

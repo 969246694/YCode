@@ -60,8 +60,14 @@ void Engine::tick()
 
     auto now = std::chrono::steady_clock::now();
     auto deltaMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTick_).count();
+    auto deltaSeconds = std::chrono::duration<float>(now - lastTick_).count();
     lastTick_ = now;
-    eventBus_.publish({"engine.tick", {{"deltaMs", std::to_string(deltaMs)}}});
+
+    scene_.update(deltaSeconds);
+    eventBus_.publish({"engine.tick",
+                       {{"deltaMs", std::to_string(deltaMs)},
+                        {"deltaSeconds", std::to_string(deltaSeconds)},
+                        {"entityCount", std::to_string(scene_.entityCount())}}});
 }
 
 void Engine::shutdown()
@@ -109,6 +115,16 @@ PluginLoader& Engine::plugins()
 const PluginLoader& Engine::plugins() const
 {
     return pluginLoader_;
+}
+
+Scene& Engine::scene()
+{
+    return scene_;
+}
+
+const Scene& Engine::scene() const
+{
+    return scene_;
 }
 
 Window& Engine::window()
