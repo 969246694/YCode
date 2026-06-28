@@ -404,6 +404,7 @@ void MainWindow::setupActivityBar()
                 delete agentManager;
             }
             agentManager = new AgentManager(currentProjectPath, apiKey, this);
+            agentManager->setWorkspacePath(workspacePath);
             connectAgentSignals();  // ★ 使用统一信号连接
             if (!apiKey.isEmpty())
                 agentManager->start();
@@ -418,7 +419,7 @@ void MainWindow::setupActivityBar()
 void MainWindow::setupFileExplorer()
 {
     fileSystemModel = new QFileSystemModel(this);
-    QString rootPath = currentProjectPath.isEmpty() ? defaultProjectPath() : currentProjectPath;
+    QString rootPath = activeWorkspacePath();
     fileSystemModel->setRootPath(rootPath);
     fileSystemModel->setFilter(QDir::NoDot | QDir::AllDirs | QDir::Files);
     fileSystemModel->setNameFilters(QStringList()
@@ -631,7 +632,7 @@ void MainWindow::setupBottomPanel()
 
         // 执行简单命令
         QProcess proc;
-        proc.setWorkingDirectory(currentProjectPath);
+        proc.setWorkingDirectory(activeWorkspacePath());
         proc.start("cmd", QStringList() << "/c" << cmd);
         proc.waitForFinished(5000);
         QString output = QString::fromLocal8Bit(proc.readAllStandardOutput());
@@ -787,6 +788,11 @@ void MainWindow::setupMenuBar()
     // 游戏开发菜单
     QMenu *gameMenu = menuBar->addMenu("游戏开发(&G)");
     gameMenu->addAction("🎮 新建 YCode 游戏项目...", this, &MainWindow::createGameProject);
+    gameMenu->addAction("📂 打开 YCode 游戏项目...", this, &MainWindow::openGameProject);
+    gameMenu->addSeparator();
+    gameMenu->addAction("🔨 构建当前游戏项目", this, &MainWindow::buildGameProject);
+    gameMenu->addAction("▶️ 运行当前游戏项目", this, &MainWindow::runGameProject);
+    gameMenu->addSeparator();
     gameMenu->addAction("🛠 构建 YCode Engine", this, &MainWindow::buildYCodeEngine);
     gameMenu->addAction("📂 打开引擎源码目录", this, &MainWindow::openYCodeEngineFolder);
     gameMenu->addSeparator();
@@ -1149,7 +1155,7 @@ void MainWindow::replaceAll()
 
 void MainWindow::openFile()
 {
-    QString filePath = QFileDialog::getOpenFileName(this, "打开文件", currentProjectPath,
+    QString filePath = QFileDialog::getOpenFileName(this, "打开文件", activeWorkspacePath(),
                                                     "所有支持的文件 (*.cpp *.h *.hpp *.c *.py *.js *.ts *.txt *.md *.json *.xml);;C++文件 (*.cpp *.h *.hpp);;所有文件 (*.*)");
     if (filePath.isEmpty())
         return;
@@ -1217,7 +1223,7 @@ void MainWindow::saveAsFile()
     if (!editor)
         return;
 
-    QString filePath = QFileDialog::getSaveFileName(this, "保存文件", currentProjectPath,
+    QString filePath = QFileDialog::getSaveFileName(this, "保存文件", activeWorkspacePath(),
                                                     "C++文件 (*.cpp);;头文件 (*.h);;Python (*.py);;文本文件 (*.txt)");
     if (filePath.isEmpty())
         return;
@@ -1292,7 +1298,7 @@ void MainWindow::clearChat()
 
 void MainWindow::createGameProject()
 {
-    QString parentDir = QFileDialog::getExistingDirectory(this, "选择游戏项目父目录", currentProjectPath);
+    QString parentDir = QFileDialog::getExistingDirectory(this, "选择游戏项目父目录", activeWorkspacePath());
     if (parentDir.isEmpty())
         return;
 
@@ -1344,12 +1350,22 @@ target_link_libraries(%1 PRIVATE ycode_engine)
     QString mainCpp = QString(
 R"(#include <ycode/core.h>
 
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 int main()
 {
-    ycode::Engine engine({ "%1", "plugins", 60 });
+    ycode::EngineConfig config;
+    config.appName = "%1";
+    config.window.title = "%1";
+    config.window.width = 1280;
+    config.window.height = 720;
+
+    ycode::Engine engine(config);
     engine.events().subscribe("*", [](const ycode::Event& event) {
+        if (event.type == "engine.tick")
+            return;
         std::cout << "[event] " << event.type << std::endl;
     });
 
@@ -1360,8 +1376,11 @@ int main()
         return 1;
     }
 
-    for (int i = 0; i < 3; ++i)
+    while (engine.isRunning())
+    {
         engine.tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+    }
 
     engine.shutdown();
     return 0;
@@ -1403,8 +1422,68 @@ cmake --build . --config Release
         editorTabs->setCurrentIndex(index);
     }
 
+    workspacePath = QDir(projectDir).absolutePath();
+    if (agentManager)
+        agentManager->setWorkspacePath(workspacePath);
+    updateFileTree(workspacePath);
+    saveSettings();
+
     appendToChat("已创建 YCode 游戏项目: " + projectDir, false);
     statusMessage->setText("游戏项目已创建");
+}
+
+void MainWindow::openGameProject()
+{
+    QString dirPath = QFileDialog::getExistingDirectory(this, "打开 YCode 游戏项目", activeWorkspacePath());
+    if (dirPath.isEmpty())
+        return;
+
+    if (!isYCodeGameProject(dirPath))
+    {
+        QMessageBox::warning(this, "不是 YCode 游戏项目",
+                             "所选目录缺少 CMakeLists.txt 或 src/main.cpp:\n" + dirPath);
+        return;
+    }
+
+    workspacePath = QDir(dirPath).absolutePath();
+    if (agentManager)
+        agentManager->setWorkspacePath(workspacePath);
+    updateFileTree(workspacePath);
+    saveSettings();
+    appendToChat("已打开 YCode 游戏项目: " + workspacePath, false);
+    statusMessage->setText("游戏项目已打开");
+}
+
+void MainWindow::buildGameProject()
+{
+    if (workspacePath.isEmpty() || !isYCodeGameProject(workspacePath))
+    {
+        QMessageBox::information(this, "没有游戏项目", "请先在 游戏开发 菜单中新建或打开 YCode 游戏项目。");
+        return;
+    }
+
+    QString command = "cmake -S . -B build\\msvc2022_64 -A x64 && "
+                      "cmake --build build\\msvc2022_64 --config Release";
+    runTerminalProcess("Building game project", "cmd.exe", QStringList() << "/c" << command, workspacePath);
+}
+
+void MainWindow::runGameProject()
+{
+    if (workspacePath.isEmpty() || !isYCodeGameProject(workspacePath))
+    {
+        QMessageBox::information(this, "没有游戏项目", "请先在 游戏开发 菜单中新建或打开 YCode 游戏项目。");
+        return;
+    }
+
+    QString executablePath = gameExecutablePath(workspacePath);
+    if (!QFileInfo::exists(executablePath))
+    {
+        QMessageBox::information(this, "需要先构建",
+                                 "没有找到游戏可执行文件，请先构建当前游戏项目。\n\n" + executablePath);
+        return;
+    }
+
+    runTerminalProcess("Running game project", executablePath, QStringList(), workspacePath);
 }
 
 void MainWindow::buildYCodeEngine()
@@ -1417,38 +1496,8 @@ void MainWindow::buildYCodeEngine()
         return;
     }
 
-    bottomPanel->setVisible(true);
-    showBottomPanel = true;
-    bottomTabs->setCurrentIndex(0);
-    terminalOutput->appendPlainText("== Building YCode Engine ==");
-
-    QProcess *process = new QProcess(this);
-    process->setWorkingDirectory(engineDir);
-    process->setProcessChannelMode(QProcess::MergedChannels);
-
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    env.insert("YCODE_NONINTERACTIVE", "1");
-    process->setProcessEnvironment(env);
-
-    connect(process, &QProcess::readyReadStandardOutput, this, [this, process]() {
-        terminalOutput->appendPlainText(QString::fromLocal8Bit(process->readAllStandardOutput()));
-    });
-    connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-            this, [this, process](int exitCode, QProcess::ExitStatus exitStatus) {
-        terminalOutput->appendPlainText(QString("== YCode Engine build finished: exit %1 ==").arg(exitCode));
-        statusMessage->setText(exitStatus == QProcess::NormalExit && exitCode == 0
-                                   ? "YCode Engine 构建成功"
-                                   : "YCode Engine 构建失败");
-        process->deleteLater();
-    });
-
-    process->start("cmd.exe", QStringList() << "/c" << QDir::toNativeSeparators(scriptPath));
-    if (!process->waitForStarted(3000))
-    {
-        terminalOutput->appendPlainText("Failed to start YCode Engine build.");
-        statusMessage->setText("YCode Engine 构建失败");
-        process->deleteLater();
-    }
+    runTerminalProcess("Building YCode Engine", "cmd.exe",
+                       QStringList() << "/c" << QDir::toNativeSeparators(scriptPath), engineDir);
 }
 
 void MainWindow::openYCodeEngineFolder()
@@ -1458,9 +1507,10 @@ void MainWindow::openYCodeEngineFolder()
 
 void MainWindow::sendGameDevPrompt()
 {
-    QString prompt =
-        "进入 YCode 游戏开发模式。请基于内置 YCodeEngine 协助我设计、实现和调试游戏项目；"
-        "优先使用 YCodeEngine 的事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。";
+    QString prompt = QString("进入 YCode 游戏开发模式。请基于内置 YCodeEngine 协助我设计、实现和调试游戏项目；"
+                             "优先使用 YCodeEngine 的事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。"
+                             "当前游戏工作区是: %1。")
+                         .arg(workspacePath.isEmpty() ? QString("未打开") : workspacePath);
     inputField->setText(prompt);
     sendMessage();
 }
@@ -1637,9 +1687,18 @@ void MainWindow::loadSettings()
 {
     QSettings settings;
     QString fallbackProjectPath = defaultProjectPath();
-    currentProjectPath = settings.value("projectPath", fallbackProjectPath).toString();
-    if (currentProjectPath.isEmpty() || !QDir(currentProjectPath).exists())
+    currentProjectPath = settings.value("ycodeRootPath",
+                                        settings.value("projectPath", fallbackProjectPath)).toString();
+    if (currentProjectPath.isEmpty() || !QDir(currentProjectPath).exists() ||
+        !QFileInfo::exists(QDir(currentProjectPath).filePath("agent.cpp")) ||
+        !QFileInfo::exists(QDir(currentProjectPath).filePath("YZCodex")))
+    {
         currentProjectPath = fallbackProjectPath;
+    }
+
+    workspacePath = settings.value("workspacePath").toString();
+    if (!workspacePath.isEmpty() && !isYCodeGameProject(workspacePath))
+        workspacePath.clear();
 
     QByteArray envApiKey = qgetenv("DEEPSEEK_API_KEY");
     if (!envApiKey.isEmpty())
@@ -1651,10 +1710,11 @@ void MainWindow::loadSettings()
     showBottomPanel = settings.value("showBottomPanel", true).toBool();
 
     // 更新文件树
-    updateFileTree(currentProjectPath);
+    updateFileTree(activeWorkspacePath());
 
     // 启动 Agent
     agentManager = new AgentManager(currentProjectPath, apiKey, this);
+    agentManager->setWorkspacePath(workspacePath);
     connectAgentSignals();  // ★ 使用统一信号连接
 
     if (!apiKey.isEmpty())
@@ -1664,7 +1724,9 @@ void MainWindow::loadSettings()
 void MainWindow::saveSettings()
 {
     QSettings settings;
+    settings.setValue("ycodeRootPath", currentProjectPath);
     settings.setValue("projectPath", currentProjectPath);
+    settings.setValue("workspacePath", workspacePath);
     settings.remove("apiKey");
     settings.setValue("showBottomPanel", showBottomPanel);
     settings.setValue("geometry", saveGeometry());
@@ -1740,6 +1802,76 @@ bool MainWindow::writeTextFile(const QString &filePath, const QString &content)
     file.write(content.toUtf8());
     file.close();
     return true;
+}
+
+bool MainWindow::isYCodeGameProject(const QString &path) const
+{
+    QDir dir(path);
+    return QFileInfo::exists(dir.filePath("CMakeLists.txt")) &&
+           QFileInfo::exists(dir.filePath("src/main.cpp"));
+}
+
+QString MainWindow::activeWorkspacePath() const
+{
+    if (!workspacePath.isEmpty() && QDir(workspacePath).exists())
+        return workspacePath;
+
+    if (!currentProjectPath.isEmpty() && QDir(currentProjectPath).exists())
+        return currentProjectPath;
+
+    return defaultProjectPath();
+}
+
+QString MainWindow::gameExecutablePath(const QString &projectPath) const
+{
+    QDir projectDir(projectPath);
+    QString projectName = QFileInfo(projectDir.absolutePath()).fileName();
+#ifdef Q_OS_WIN
+    return projectDir.filePath("build/msvc2022_64/Release/" + projectName + ".exe");
+#else
+    return projectDir.filePath("build/msvc2022_64/" + projectName);
+#endif
+}
+
+void MainWindow::runTerminalProcess(const QString &title, const QString &program,
+                                    const QStringList &arguments, const QString &workingDirectory)
+{
+    bottomPanel->setVisible(true);
+    showBottomPanel = true;
+    bottomTabs->setCurrentIndex(0);
+    terminalOutput->appendPlainText("== " + title + " ==");
+
+    QProcess *process = new QProcess(this);
+    process->setWorkingDirectory(workingDirectory);
+    process->setProcessChannelMode(QProcess::MergedChannels);
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("YCODE_NONINTERACTIVE", "1");
+    process->setProcessEnvironment(env);
+
+    connect(process, &QProcess::readyReadStandardOutput, this, [this, process]() {
+        terminalOutput->appendPlainText(QString::fromLocal8Bit(process->readAllStandardOutput()));
+        QScrollBar *sb = terminalOutput->verticalScrollBar();
+        sb->setValue(sb->maximum());
+    });
+    connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, process, title](int exitCode, QProcess::ExitStatus exitStatus) {
+        terminalOutput->appendPlainText(QString("== %1 finished: exit %2 ==")
+                                            .arg(title)
+                                            .arg(exitCode));
+        statusMessage->setText(exitStatus == QProcess::NormalExit && exitCode == 0
+                                   ? title + " 成功"
+                                   : title + " 失败");
+        process->deleteLater();
+    });
+
+    process->start(program, arguments);
+    if (!process->waitForStarted(3000))
+    {
+        terminalOutput->appendPlainText("Failed to start: " + program + " " + arguments.join(' '));
+        statusMessage->setText(title + " 失败");
+        process->deleteLater();
+    }
 }
 
 bool MainWindow::reloadStyleSheet(bool notifyUser)

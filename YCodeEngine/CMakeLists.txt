@@ -10,6 +10,12 @@ add_library(ycode_engine STATIC
     src/plugin_loader.cpp
 )
 
+if(WIN32)
+    target_sources(ycode_engine PRIVATE src/window_win32.cpp)
+else()
+    target_sources(ycode_engine PRIVATE src/window_null.cpp)
+endif()
+
 target_include_directories(ycode_engine
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -19,6 +25,7 @@ target_compile_features(ycode_engine PUBLIC cxx_std_17)
 
 if(WIN32)
     target_compile_definitions(ycode_engine PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(ycode_engine PUBLIC user32 gdi32)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(ycode_engine PUBLIC dl)
 endif()
@@ -28,4 +35,3 @@ add_executable(ycode_engine_launcher
 )
 
 target_link_libraries(ycode_engine_launcher PRIVATE ycode_engine)
-

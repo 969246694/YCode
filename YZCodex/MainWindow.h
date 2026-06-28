@@ -55,6 +55,9 @@ private slots:
     void onReloadStyleRequested();
     void checkForUpdates();
     void createGameProject();
+    void openGameProject();
+    void buildGameProject();
+    void runGameProject();
     void buildYCodeEngine();
     void openYCodeEngineFolder();
     void sendGameDevPrompt();
@@ -101,10 +104,14 @@ private:
     bool startYCodeSelfUpdate(const QStringList &arguments = QStringList());
     bool reloadStyleSheet(bool notifyUser = true);
     bool writeTextFile(const QString &filePath, const QString &content);
+    bool isYCodeGameProject(const QString &path) const;
+    void runTerminalProcess(const QString &title, const QString &program, const QStringList &arguments, const QString &workingDirectory);
     QString runGitCommand(const QStringList &arguments, int timeoutMs, bool *ok = nullptr);
     QString defaultProjectPath() const;
     QString defaultIconPath() const;
     QString ycodeEnginePath() const;
+    QString activeWorkspacePath() const;
+    QString gameExecutablePath(const QString &projectPath) const;
 
     // ============ 布局组件 ============
     // 活动栏 (最左侧)
@@ -166,7 +173,8 @@ private:
     AgentManager *agentManager;
 
     // 设置
-    QString currentProjectPath;
+    QString currentProjectPath;  // YCode 自身根目录，供 Agent、自更新和 Git 操作使用
+    QString workspacePath;       // 当前游戏项目工作区；为空时文件树显示 YCode 根目录
     QString apiKey;
     bool showBottomPanel;
     bool selfUpdateInProgress;

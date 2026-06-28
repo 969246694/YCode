@@ -4,6 +4,7 @@
 #include "ycode/event_bus.h"
 #include "ycode/plugin_loader.h"
 #include "ycode/version.h"
+#include "ycode/window.h"
 
 #include <chrono>
 #include <string>
@@ -14,6 +15,8 @@ struct EngineConfig {
     std::string appName = "YCode Game";
     std::string pluginDirectory = "plugins";
     int targetFps = 60;
+    bool createWindow = true;
+    WindowConfig window;
 };
 
 class Engine {
@@ -33,11 +36,14 @@ public:
     const EventBus& events() const;
     PluginLoader& plugins();
     const PluginLoader& plugins() const;
+    Window& window();
+    const Window& window() const;
 
 private:
     EngineConfig config_;
     EventBus eventBus_;
     PluginLoader pluginLoader_;
+    Window window_;
     bool running_ = false;
     std::chrono::steady_clock::time_point lastTick_;
 };
@@ -45,4 +51,3 @@ private:
 } // namespace ycode
 
 #endif // YCODE_ENGINE_H
-

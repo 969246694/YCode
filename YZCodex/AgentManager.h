@@ -19,6 +19,7 @@ public:
     void restart();                // ★ 新增：由 YCode 主动重启 agent 进程
     bool isRunning() const;
     void sendMessage(const QString &message);
+    void setWorkspacePath(const QString &path);
 
 signals:
     void outputReceived(const QString &output);
@@ -40,6 +41,7 @@ private:
 
     QProcess *agentProcess;
     QString projectPath;
+    QString workspacePath;
     QString apiKey;
     bool running;
     bool restartPending;           // ★ 标记是否有待处理的重启

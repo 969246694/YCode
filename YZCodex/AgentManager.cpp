@@ -48,6 +48,8 @@ void AgentManager::startProcess()
     }
     env.insert("YCODE_MANAGED", "1");
     env.insert("YCODE_PROJECT_ROOT", QDir::toNativeSeparators(projectPath));
+    if (!workspacePath.isEmpty())
+        env.insert("YCODE_WORKSPACE_ROOT", QDir::toNativeSeparators(workspacePath));
     agentProcess->setProcessEnvironment(env);
 
     // 查找 agent.exe
@@ -154,6 +156,11 @@ void AgentManager::sendMessage(const QString &message)
     QByteArray data = (message + "\n").toUtf8();
     agentProcess->write(data);
     agentProcess->waitForBytesWritten(1000);
+}
+
+void AgentManager::setWorkspacePath(const QString &path)
+{
+    workspacePath = path;
 }
 
 void AgentManager::onReadyReadStandardOutput()

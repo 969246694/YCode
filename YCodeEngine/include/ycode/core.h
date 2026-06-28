@@ -6,6 +6,6 @@
 #include "ycode/plugin.h"
 #include "ycode/plugin_loader.h"
 #include "ycode/version.h"
+#include "ycode/window.h"
 
 #endif // YCODE_CORE_H
-
