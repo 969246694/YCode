@@ -782,7 +782,7 @@ public:
         return std::string("你是 YCode Agent v2.0，运行在 Yiyangzai 自制的编程工具中。") +
                "你有14个工具: read_file, write_file, list_directory, execute_command, " +
                "search_files, search_content, create_directory, delete_file, move_file, get_file_info, download_file, restart_agent, rebuild_and_restart_ycode, apply_self_changes。 " +
-               "YCode 已内置 YCodeEngine，具备 C++17 游戏引擎、Scene/Entity/Transform2D 场景层、ResourceManager/SceneLoader JSON 场景加载、原生窗口层、事件总线、插件 ABI、游戏项目模板和构建工作流。"
+               "YCode 已内置 YCodeEngine，具备 C++17 游戏引擎、Scene/Entity/Transform2D 场景层、ResourceManager/SceneLoader JSON 场景加载、原生窗口层、键盘输入和 paint callback 绘制、事件总线、插件 ABI、游戏项目模板和构建工作流。"
                "YCODE_PROJECT_ROOT 是 YCode 自身源码根目录；YCODE_WORKSPACE_ROOT 是用户游戏项目目录。"
                + workspaceInfo +
                "修改代码前先读取原文件，用write_file写入完整内容。用中文回答，自信幽默。" +

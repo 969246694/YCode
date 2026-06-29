@@ -9,6 +9,7 @@ It replaces the old standalone `YiyangzaiEngine` direction with a YCode-owned su
 - Scene, entity, and transform model
 - Resource manager and JSON scene loader
 - Minimal native window layer
+- Keyboard input and paint callback hooks
 - Stable C ABI plugin contract
 - Cross-platform dynamic plugin loader
 - CMake build
