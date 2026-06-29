@@ -14,9 +14,15 @@ add_library(ycode_engine STATIC
 )
 
 if(WIN32)
-    target_sources(ycode_engine PRIVATE src/window_win32.cpp)
+    target_sources(ycode_engine PRIVATE
+        src/canvas2d_win32.cpp
+        src/window_win32.cpp
+    )
 else()
-    target_sources(ycode_engine PRIVATE src/window_null.cpp)
+    target_sources(ycode_engine PRIVATE
+        src/canvas2d_null.cpp
+        src/window_null.cpp
+    )
 endif()
 
 target_include_directories(ycode_engine

@@ -98,7 +98,7 @@ YCode 内部区分三个路径：
 - `PluginLoader`: 跨平台动态插件加载器。
 - `plugin.h`: 稳定 C ABI 插件接口。
 - `Engine`: 初始化、tick、shutdown 生命周期。
-- `Window`: 最小原生窗口层；Windows 下使用 Win32 创建可见游戏窗口，支持键盘状态和 paint callback。
+- `Window` / `Key` / `Canvas2D`: 最小窗口、键盘输入和 2D 矩形绘制封装；Windows 下由 Win32/GDI 实现。
 
 ## 自更新
 

@@ -1,6 +1,8 @@
 #ifndef YCODE_WINDOW_H
 #define YCODE_WINDOW_H
 
+#include "ycode/input.h"
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -38,10 +40,18 @@ public:
     // ---- Input -----------------------------------------------------------
     /// Returns true while the virtual key is held down.
     bool isKeyDown(int virtualKey) const;
+    bool isKeyDown(Key key) const
+    {
+        return isKeyDown(static_cast<int>(key));
+    }
 
     /// Returns true only on the first frame the key transitions to down.
     /// Cleared each frame by endFrame().
     bool wasKeyPressed(int virtualKey) const;
+    bool wasKeyPressed(Key key) const
+    {
+        return wasKeyPressed(static_cast<int>(key));
+    }
 
     /// Must be called once per frame (after pollEvents / before next tick)
     /// to clear per-frame input flags.

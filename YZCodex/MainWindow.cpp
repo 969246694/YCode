@@ -1351,65 +1351,31 @@ target_link_libraries(%1 PRIVATE ycode_engine)
     QString mainCpp = QString(
 R"(#include <ycode/core.h>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#endif
-
 #include <chrono>
 #include <iostream>
 #include <thread>
 
 namespace {
 
-constexpr int kKeyLeft = 0x25;
-constexpr int kKeyUp = 0x26;
-constexpr int kKeyRight = 0x27;
-constexpr int kKeyDown = 0x28;
-constexpr int kKeyA = 'A';
-constexpr int kKeyD = 'D';
-constexpr int kKeyS = 'S';
-constexpr int kKeyW = 'W';
-
-#ifdef _WIN32
 void drawScene(ycode::Engine& engine, ycode::EntityId playerId, void* nativeDc, int width, int height)
 {
-    HDC dc = static_cast<HDC>(nativeDc);
     auto* entity = engine.scene().findEntity(playerId);
     if (!entity)
         return;
 
-    int size = static_cast<int>(48.0f * entity->transform.scale.x);
+    ycode::Canvas2D canvas(nativeDc, width, height);
+    float size = 48.0f * entity->transform.scale.x;
     if (size < 16)
         size = 16;
 
-    int centerX = width / 2 + static_cast<int>(entity->transform.position.x);
-    int centerY = height / 2 - static_cast<int>(entity->transform.position.y);
-    RECT playerRect = {
-        centerX - size / 2,
-        centerY - size / 2,
-        centerX + size / 2,
-        centerY + size / 2
-    };
+    float centerX = static_cast<float>(width) * 0.5f + entity->transform.position.x;
+    float centerY = static_cast<float>(height) * 0.5f - entity->transform.position.y;
+    float left = centerX - size * 0.5f;
+    float top = centerY - size * 0.5f;
 
-    HBRUSH playerBrush = CreateSolidBrush(RGB(54, 162, 235));
-    FillRect(dc, &playerRect, playerBrush);
-    DeleteObject(playerBrush);
-
-    HPEN outlinePen = CreatePen(PS_SOLID, 2, RGB(235, 245, 255));
-    HGDIOBJ oldPen = SelectObject(dc, outlinePen);
-    HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(HOLLOW_BRUSH));
-    Rectangle(dc, playerRect.left, playerRect.top, playerRect.right, playerRect.bottom);
-    SelectObject(dc, oldBrush);
-    SelectObject(dc, oldPen);
-    DeleteObject(outlinePen);
+    canvas.fillRect(left, top, size, size, ycode::Color{54, 162, 235, 255});
+    canvas.strokeRect(left, top, size, size, ycode::Color{235, 245, 255, 255}, 2);
 }
-#else
-void drawScene(ycode::Engine&, ycode::EntityId, void*, int, int)
-{
-}
-#endif
 
 } // namespace
 
@@ -1453,13 +1419,13 @@ int main()
 
         float horizontal = 0.0f;
         float vertical = 0.0f;
-        if (engine.window().isKeyDown(kKeyLeft) || engine.window().isKeyDown(kKeyA))
+        if (engine.window().isKeyDown(ycode::Key::Left) || engine.window().isKeyDown(ycode::Key::A))
             horizontal -= 1.0f;
-        if (engine.window().isKeyDown(kKeyRight) || engine.window().isKeyDown(kKeyD))
+        if (engine.window().isKeyDown(ycode::Key::Right) || engine.window().isKeyDown(ycode::Key::D))
             horizontal += 1.0f;
-        if (engine.window().isKeyDown(kKeyDown) || engine.window().isKeyDown(kKeyS))
+        if (engine.window().isKeyDown(ycode::Key::Down) || engine.window().isKeyDown(ycode::Key::S))
             vertical -= 1.0f;
-        if (engine.window().isKeyDown(kKeyUp) || engine.window().isKeyDown(kKeyW))
+        if (engine.window().isKeyDown(ycode::Key::Up) || engine.window().isKeyDown(ycode::Key::W))
             vertical += 1.0f;
 
         constexpr float speed = 220.0f;
@@ -1636,7 +1602,7 @@ void MainWindow::openYCodeEngineFolder()
 void MainWindow::sendGameDevPrompt()
 {
     QString prompt = QString("进入 YCode 游戏开发模式。请基于内置 YCodeEngine 协助我设计、实现和调试游戏项目；"
-                             "优先使用 YCodeEngine 的 Scene/Entity/Transform2D、ResourceManager/SceneLoader JSON 场景加载、键盘输入、paint callback 绘制、事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。"
+                             "优先使用 YCodeEngine 的 Scene/Entity/Transform2D、ResourceManager/SceneLoader JSON 场景加载、Key 输入枚举、Canvas2D 绘制、事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。"
                              "当前游戏工作区是: %1。")
                          .arg(workspacePath.isEmpty() ? QString("未打开") : workspacePath);
     inputField->setText(prompt);
