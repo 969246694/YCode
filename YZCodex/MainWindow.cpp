@@ -1359,26 +1359,14 @@ int main()
 {
     ycode::EngineConfig config;
     config.appName = "%1";
+    config.projectRoot = ".";
+    config.startupScenePath = "scenes/main.scene.json";
+    config.loadStartupScene = true;
     config.window.title = "%1";
     config.window.width = 1280;
     config.window.height = 720;
 
     ycode::Engine engine(config);
-    auto& player = engine.scene().createEntity("Player");
-    player.transform.position = ycode::Vec2{0.0f, 0.0f};
-    player.properties["kind"] = "prototype";
-    ycode::EntityId playerId = player.id;
-
-    engine.scene().setUpdateHandler([playerId](ycode::Scene& scene, float deltaSeconds) {
-        auto* entity = scene.findEntity(playerId);
-        if (!entity || !entity->active)
-            return;
-
-        entity->transform.position.x += 64.0f * deltaSeconds;
-        if (entity->transform.position.x > 640.0f)
-            entity->transform.position.x = 0.0f;
-    });
-
     engine.events().subscribe("*", [](const ycode::Event& event) {
         if (event.type == "engine.tick")
             return;
@@ -1391,6 +1379,24 @@ int main()
         std::cerr << "Failed to initialize YCode Engine: " << error << std::endl;
         return 1;
     }
+
+    auto* player = engine.scene().findEntityByName("Player");
+    if (!player)
+    {
+        std::cerr << "Startup scene does not contain 'Player'" << std::endl;
+        return 1;
+    }
+
+    ycode::EntityId playerId = player->id;
+    engine.scene().setUpdateHandler([playerId](ycode::Scene& scene, float deltaSeconds) {
+        auto* entity = scene.findEntity(playerId);
+        if (!entity || !entity->active)
+            return;
+
+        entity->transform.position.x += 64.0f * deltaSeconds;
+        if (entity->transform.position.x > 640.0f)
+            entity->transform.position.x = 0.0f;
+    });
 
     while (engine.isRunning())
     {
@@ -1411,7 +1417,7 @@ This is a YCode game project powered by the built-in YCode Engine.
 ## Structure
 
 - `src/main.cpp`: game entry point and scene update loop.
-- `scenes/main.scene.json`: starter scene manifest.
+- `scenes/main.scene.json`: startup scene loaded by YCode Engine.
 - `assets/`: game assets.
 - `plugins/`: optional native plugins.
 
@@ -1551,7 +1557,7 @@ void MainWindow::openYCodeEngineFolder()
 void MainWindow::sendGameDevPrompt()
 {
     QString prompt = QString("进入 YCode 游戏开发模式。请基于内置 YCodeEngine 协助我设计、实现和调试游戏项目；"
-                             "优先使用 YCodeEngine 的 Scene/Entity/Transform2D、事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。"
+                             "优先使用 YCodeEngine 的 Scene/Entity/Transform2D、ResourceManager/SceneLoader JSON 场景加载、事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。"
                              "当前游戏工作区是: %1。")
                          .arg(workspacePath.isEmpty() ? QString("未打开") : workspacePath);
     inputField->setText(prompt);

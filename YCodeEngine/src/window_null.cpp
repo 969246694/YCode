@@ -1,9 +1,12 @@
 #include "ycode/window.h"
 
+#include <utility>
+
 namespace ycode {
 
 struct Window::Impl {
     bool open = false;
+    Window::PaintHandler paintHandler;
 };
 
 Window::Window()
@@ -48,6 +51,35 @@ bool Window::isOpen() const
 const WindowConfig& Window::config() const
 {
     return config_;
+}
+
+bool Window::isKeyDown(int) const
+{
+    return false;
+}
+
+bool Window::wasKeyPressed(int) const
+{
+    return false;
+}
+
+void Window::endFrame()
+{
+}
+
+void Window::setPaintHandler(PaintHandler handler)
+{
+    if (impl_)
+        impl_->paintHandler = std::move(handler);
+}
+
+void Window::invalidate()
+{
+}
+
+void* Window::getNativeHandle() const
+{
+    return nullptr;
 }
 
 } // namespace ycode

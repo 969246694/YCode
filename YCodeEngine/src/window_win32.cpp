@@ -1,5 +1,7 @@
 #include "ycode/window.h"
 
+#include <unordered_set>
+#include <utility>
 #include <windows.h>
 
 namespace ycode {
@@ -7,6 +9,13 @@ namespace ycode {
 struct Window::Impl {
     HWND hwnd = nullptr;
     bool open = false;
+
+    // Input state
+    std::unordered_set<int> keysDown;
+    std::unordered_set<int> keysPressed;
+
+    // Paint callback
+    Window::PaintHandler paintHandler;
 };
 
 namespace {
@@ -41,11 +50,13 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(createStruct->lpCreateParams));
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
+
     case WM_CLOSE:
         if (impl)
             impl->open = false;
         DestroyWindow(hwnd);
         return 0;
+
     case WM_DESTROY:
         if (impl)
         {
@@ -53,21 +64,63 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             impl->open = false;
         }
         return 0;
+
+    // ---- Keyboard input --------------------------------------------------
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+    {
+        int vk = static_cast<int>(wParam);
+        // Suppress auto-repeat: only flag as "pressed" on first transition
+        bool wasDown = (lParam & (1 << 30)) != 0; // bit 30 = previous key state
+        if (impl)
+        {
+            if (!wasDown)
+                impl->keysPressed.insert(vk);
+            impl->keysDown.insert(vk);
+        }
+        return 0;
+    }
+
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        if (impl)
+        {
+            impl->keysDown.erase(static_cast<int>(wParam));
+        }
+        return 0;
+
+    // ---- Painting --------------------------------------------------------
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
         RECT rect;
         GetClientRect(hwnd, &rect);
+        int width = rect.right - rect.left;
+        int height = rect.bottom - rect.top;
+
+        // Default background
         HBRUSH background = CreateSolidBrush(RGB(18, 18, 24));
         FillRect(dc, &rect, background);
         DeleteObject(background);
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(235, 235, 245));
-        DrawTextW(dc, L"YCode Engine", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+        // If the user provided a paint handler, call it.
+        // Otherwise, draw the placeholder text.
+        if (impl && impl->paintHandler)
+        {
+            impl->paintHandler(dc, width, height);
+        }
+        else
+        {
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, RGB(235, 235, 245));
+            DrawTextW(dc, L"YCode Engine", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
+
         EndPaint(hwnd, &ps);
         return 0;
     }
+
     default:
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
@@ -185,6 +238,43 @@ bool Window::isOpen() const
 const WindowConfig& Window::config() const
 {
     return config_;
+}
+
+// ---- Input ---------------------------------------------------------------
+
+bool Window::isKeyDown(int virtualKey) const
+{
+    return impl_ && impl_->keysDown.count(virtualKey) > 0;
+}
+
+bool Window::wasKeyPressed(int virtualKey) const
+{
+    return impl_ && impl_->keysPressed.count(virtualKey) > 0;
+}
+
+void Window::endFrame()
+{
+    if (impl_)
+        impl_->keysPressed.clear();
+}
+
+// ---- Rendering -----------------------------------------------------------
+
+void Window::setPaintHandler(PaintHandler handler)
+{
+    if (impl_)
+        impl_->paintHandler = std::move(handler);
+}
+
+void Window::invalidate()
+{
+    if (impl_ && impl_->hwnd)
+        InvalidateRect(impl_->hwnd, nullptr, FALSE);
+}
+
+void* Window::getNativeHandle() const
+{
+    return impl_ ? impl_->hwnd : nullptr;
 }
 
 } // namespace ycode

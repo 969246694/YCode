@@ -94,6 +94,7 @@ YCode 内部区分三个路径：
 
 - `EventBus`: 发布/订阅事件总线。
 - `Scene` / `Entity` / `Transform2D`: 轻量场景和游戏对象基础层。
+- `ResourceManager` / `SceneLoader`: 读取项目资源并从 JSON 场景文件生成实体。
 - `PluginLoader`: 跨平台动态插件加载器。
 - `plugin.h`: 稳定 C ABI 插件接口。
 - `Engine`: 初始化、tick、shutdown 生命周期。

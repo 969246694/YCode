@@ -52,7 +52,7 @@ build\msvc2022_64\Release\YCode.exe
 
 YCode 客户端会把 YCode 自身根目录和游戏工作区分开：Agent、自更新和检查更新固定使用 YCode 根目录；文件树、终端、游戏构建和运行使用当前游戏工作区。
 
-新建游戏项目会生成 CMake 入口、`src/main.cpp`、`scenes/main.scene.json`、`assets/` 和 `plugins/`。示例代码会创建一个 `Player` 实体并通过 YCodeEngine 的 `Scene` update handler 更新它的 `Transform2D`。
+新建游戏项目会生成 CMake 入口、`src/main.cpp`、`scenes/main.scene.json`、`assets/` 和 `plugins/`。示例代码会让 YCodeEngine 从 `scenes/main.scene.json` 加载 `Player` 实体，并通过 `Scene` update handler 更新它的 `Transform2D`。
 
 ## 配置
 

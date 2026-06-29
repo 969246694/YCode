@@ -1,6 +1,7 @@
 #ifndef YCODE_WINDOW_H
 #define YCODE_WINDOW_H
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -17,6 +18,10 @@ class Window {
 public:
     struct Impl;
 
+    /// Called during WM_PAINT.  hdc is the device context (HDC on Win32),
+    /// width/height are the client area dimensions.
+    using PaintHandler = std::function<void(void* hdc, int width, int height)>;
+
     Window();
     ~Window();
 
@@ -29,6 +34,29 @@ public:
 
     bool isOpen() const;
     const WindowConfig& config() const;
+
+    // ---- Input -----------------------------------------------------------
+    /// Returns true while the virtual key is held down.
+    bool isKeyDown(int virtualKey) const;
+
+    /// Returns true only on the first frame the key transitions to down.
+    /// Cleared each frame by endFrame().
+    bool wasKeyPressed(int virtualKey) const;
+
+    /// Must be called once per frame (after pollEvents / before next tick)
+    /// to clear per-frame input flags.
+    void endFrame();
+
+    // ---- Rendering -------------------------------------------------------
+    /// Set a callback that will be invoked inside WM_PAINT.
+    /// The callback receives the native HDC and client-area dimensions.
+    void setPaintHandler(PaintHandler handler);
+
+    /// Trigger a repaint (InvalidateRect on Win32).
+    void invalidate();
+
+    /// Returns the native window handle (HWND on Win32).
+    void* getNativeHandle() const;
 
 private:
     std::unique_ptr<Impl> impl_;

@@ -1,0 +1,16 @@
+{
+  "name": "YCode Engine Sandbox Scene",
+  "entities": [
+    {
+      "name": "Sandbox Player",
+      "transform": {
+        "position": [0.0, 0.0],
+        "rotationDegrees": 0.0,
+        "scale": [1.0, 1.0]
+      },
+      "properties": {
+        "kind": "prototype"
+      }
+    }
+  ]
+}

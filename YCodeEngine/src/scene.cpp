@@ -89,6 +89,7 @@ bool Scene::empty() const
 void Scene::clear()
 {
     entities_.clear();
+    nextEntityId_ = 1;
 }
 
 void Scene::update(float deltaSeconds)

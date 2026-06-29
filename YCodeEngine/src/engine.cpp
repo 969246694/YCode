@@ -1,4 +1,5 @@
 #include "ycode/engine.h"
+#include "ycode/scene_loader.h"
 
 #include <string>
 #include <utility>
@@ -6,7 +7,8 @@
 namespace ycode {
 
 Engine::Engine(EngineConfig config)
-    : config_(std::move(config))
+    : config_(std::move(config)),
+      resources_(config_.projectRoot)
 {
 }
 
@@ -25,6 +27,21 @@ bool Engine::initialize(std::string* error)
         if (error)
             *error = "targetFps must be greater than zero";
         return false;
+    }
+
+    resources_.setRootPath(config_.projectRoot);
+
+    if (config_.loadStartupScene)
+    {
+        if (config_.startupScenePath.empty())
+        {
+            if (error)
+                *error = "startupScenePath is empty";
+            return false;
+        }
+
+        if (!loadScene(config_.startupScenePath, error))
+            return false;
     }
 
     if (config_.createWindow)
@@ -64,10 +81,19 @@ void Engine::tick()
     lastTick_ = now;
 
     scene_.update(deltaSeconds);
+
+    // Call user's render handler (if set) after the scene update.
+    if (renderHandler_)
+        renderHandler_();
+
     eventBus_.publish({"engine.tick",
                        {{"deltaMs", std::to_string(deltaMs)},
                         {"deltaSeconds", std::to_string(deltaSeconds)},
                         {"entityCount", std::to_string(scene_.entityCount())}}});
+
+    // Reset per-frame input state at the very end of the tick.
+    if (config_.createWindow)
+        window_.endFrame();
 }
 
 void Engine::shutdown()
@@ -85,6 +111,20 @@ void Engine::shutdown()
 bool Engine::loadPlugin(const std::string& path, std::string* error)
 {
     return pluginLoader_.load(path, error);
+}
+
+bool Engine::loadScene(const std::string& path, std::string* error)
+{
+    std::string resolvedPath = resources_.resolvePath(path);
+    if (!SceneLoader::loadFromFile(resolvedPath, scene_, error))
+        return false;
+
+    eventBus_.publish({"engine.scene_loaded",
+                       {{"path", path},
+                        {"resolvedPath", resolvedPath},
+                        {"sceneName", scene_.name()},
+                        {"entityCount", std::to_string(scene_.entityCount())}}});
+    return true;
 }
 
 bool Engine::isRunning() const
@@ -117,6 +157,16 @@ const PluginLoader& Engine::plugins() const
     return pluginLoader_;
 }
 
+ResourceManager& Engine::resources()
+{
+    return resources_;
+}
+
+const ResourceManager& Engine::resources() const
+{
+    return resources_;
+}
+
 Scene& Engine::scene()
 {
     return scene_;
@@ -135,6 +185,11 @@ Window& Engine::window()
 const Window& Engine::window() const
 {
     return window_;
+}
+
+void Engine::setRenderHandler(RenderHandler handler)
+{
+    renderHandler_ = std::move(handler);
 }
 
 } // namespace ycode
