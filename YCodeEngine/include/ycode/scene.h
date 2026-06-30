@@ -24,11 +24,32 @@ struct Transform2D {
     Vec2 scale{1.0f, 1.0f};
 };
 
+enum class BodyType2D {
+    Static,
+    Kinematic,
+    Dynamic
+};
+
+struct BoxCollider2D {
+    Vec2 halfSizeMeters{0.5f, 0.5f};
+    float density = 1.0f;
+    float friction = 0.3f;
+    float restitution = 0.0f;
+    bool fixedRotation = false;
+};
+
+struct PhysicsBody2D {
+    bool enabled = false;
+    BodyType2D bodyType = BodyType2D::Dynamic;
+    BoxCollider2D box;
+};
+
 struct Entity {
     EntityId id = kInvalidEntityId;
     std::string name;
     bool active = true;
     Transform2D transform;
+    PhysicsBody2D physics2D;
     std::unordered_map<std::string, std::string> properties;
 };
 

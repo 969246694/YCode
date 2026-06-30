@@ -3,30 +3,17 @@
 
 #include "ycode/scene.h"
 
+#include <cstddef>
 #include <memory>
 #include <string>
 
 namespace ycode {
-
-enum class BodyType2D {
-    Static,
-    Kinematic,
-    Dynamic
-};
 
 struct PhysicsConfig2D {
     Vec2 gravity{0.0f, -9.8f};
     float pixelsPerMeter = 64.0f;
     int subStepCount = 4;
     bool enabled = true;
-};
-
-struct BoxCollider2D {
-    Vec2 halfSizeMeters{0.5f, 0.5f};
-    float density = 1.0f;
-    float friction = 0.3f;
-    float restitution = 0.0f;
-    bool fixedRotation = false;
 };
 
 class PhysicsWorld2D {
@@ -50,8 +37,10 @@ public:
                    BodyType2D bodyType,
                    BoxCollider2D collider = {},
                    std::string* error = nullptr);
+    bool attachSceneBodies(Scene& scene, std::string* error = nullptr);
     bool detach(EntityId entityId);
     bool hasBody(EntityId entityId) const;
+    std::size_t bodyCount() const;
     void clear();
 
     void step(Scene& scene, float deltaSeconds);

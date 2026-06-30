@@ -48,3 +48,25 @@ build\msvc2022_64\Release\ycode_engine_launcher.exe
 
 - `third_party/nlohmann/`: vendored `nlohmann/json` headers, MIT license, used by `SceneLoader`.
 - `third_party/box2d/`: vendored Box2D 3.1.1 source, MIT license, used by `PhysicsWorld2D`.
+
+## Scene physics
+
+`SceneLoader` supports declarative 2D physics on each entity:
+
+```json
+{
+  "name": "Player",
+  "transform": {
+    "position": [0.0, 80.0]
+  },
+  "physics2D": {
+    "bodyType": "dynamic",
+    "box": {
+      "halfSizeMeters": [0.375, 0.375],
+      "fixedRotation": true
+    }
+  }
+}
+```
+
+`Engine::loadScene()` automatically clears and rebuilds `PhysicsWorld2D` bodies from these declarations.

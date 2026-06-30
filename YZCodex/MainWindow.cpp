@@ -1433,23 +1433,9 @@ int main()
     }
 
     ycode::EntityId groundId = ground->id;
-
-    ycode::BoxCollider2D playerCollider;
-    playerCollider.halfSizeMeters = ycode::Vec2{0.375f, 0.375f};
-    playerCollider.fixedRotation = true;
-    if (!engine.physics().attachBox(engine.scene(), playerId, ycode::BodyType2D::Dynamic, playerCollider, &error))
+    if (!engine.physics().hasBody(playerId) || !engine.physics().hasBody(groundId))
     {
-        std::cerr << "Failed to attach player physics body: " << error << std::endl;
-        return 1;
-    }
-
-    ycode::BoxCollider2D groundCollider;
-    groundCollider.halfSizeMeters = ycode::Vec2{6.0f, 0.25f};
-    groundCollider.density = 0.0f;
-    groundCollider.friction = 0.6f;
-    if (!engine.physics().attachBox(engine.scene(), groundId, ycode::BodyType2D::Static, groundCollider, &error))
-    {
-        std::cerr << "Failed to attach ground physics body: " << error << std::endl;
+        std::cerr << "Startup scene is missing physics2D bodies" << std::endl;
         return 1;
     }
 
@@ -1530,6 +1516,13 @@ R"({
         "rotationDegrees": 0.0,
         "scale": [1.0, 1.0]
       },
+      "physics2D": {
+        "bodyType": "dynamic",
+        "box": {
+          "halfSizeMeters": [0.375, 0.375],
+          "fixedRotation": true
+        }
+      },
       "properties": {
         "kind": "prototype"
       }
@@ -1540,6 +1533,14 @@ R"({
         "position": [0.0, -160.0],
         "rotationDegrees": 0.0,
         "scale": [1.0, 1.0]
+      },
+      "physics2D": {
+        "bodyType": "static",
+        "box": {
+          "halfSizeMeters": [6.0, 0.25],
+          "density": 0.0,
+          "friction": 0.6
+        }
       },
       "properties": {
         "kind": "static"

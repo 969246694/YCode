@@ -227,6 +227,25 @@ bool PhysicsWorld2D::attachBox(Scene& scene,
     return true;
 }
 
+bool PhysicsWorld2D::attachSceneBodies(Scene& scene, std::string* error)
+{
+    for (Entity& entity : scene.entities())
+    {
+        if (!entity.physics2D.enabled)
+            continue;
+
+        std::string attachError;
+        if (!attachBox(scene, entity.id, entity.physics2D.bodyType, entity.physics2D.box, &attachError))
+        {
+            if (error)
+                *error = "Failed to attach physics2D body for '" + entity.name + "': " + attachError;
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool PhysicsWorld2D::detach(EntityId entityId)
 {
     auto it = impl_->find(entityId);
@@ -243,6 +262,11 @@ bool PhysicsWorld2D::detach(EntityId entityId)
 bool PhysicsWorld2D::hasBody(EntityId entityId) const
 {
     return impl_->find(entityId) != impl_->bodies.end();
+}
+
+std::size_t PhysicsWorld2D::bodyCount() const
+{
+    return impl_->bodies.size();
 }
 
 void PhysicsWorld2D::clear()

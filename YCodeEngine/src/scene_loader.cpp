@@ -2,6 +2,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -96,6 +98,109 @@ bool readVec2Field(const Json& object, const char* key, Vec2& out, std::string* 
 
     out.x = (*value)[0].get<float>();
     out.y = (*value)[1].get<float>();
+    return true;
+}
+
+std::string toLowerAscii(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char ch) {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    return value;
+}
+
+bool readBodyTypeField(const Json& object, const char* key, BodyType2D& out, std::string* error)
+{
+    const Json* value = findField(object, key);
+    if (!value)
+        return true;
+    if (!value->is_string())
+    {
+        if (error)
+            *error = std::string("Expected '") + key + "' to be a string";
+        return false;
+    }
+
+    std::string bodyType = toLowerAscii(value->get<std::string>());
+    if (bodyType == "static")
+        out = BodyType2D::Static;
+    else if (bodyType == "kinematic")
+        out = BodyType2D::Kinematic;
+    else if (bodyType == "dynamic")
+        out = BodyType2D::Dynamic;
+    else
+    {
+        if (error)
+            *error = "Expected '" + std::string(key) + "' to be static, kinematic, or dynamic";
+        return false;
+    }
+
+    return true;
+}
+
+bool applyBoxColliderFields(const Json& object, BoxCollider2D& box, std::string* error)
+{
+    std::string shape;
+    if (!readStringField(object, "shape", shape, error))
+        return false;
+    if (!shape.empty() && toLowerAscii(shape) != "box")
+    {
+        if (error)
+            *error = "Only box physics2D colliders are supported";
+        return false;
+    }
+
+    return readVec2Field(object, "halfSizeMeters", box.halfSizeMeters, error) &&
+           readNumberField(object, "density", box.density, error) &&
+           readNumberField(object, "friction", box.friction, error) &&
+           readNumberField(object, "restitution", box.restitution, error) &&
+           readBoolField(object, "fixedRotation", box.fixedRotation, error);
+}
+
+bool applyPhysics2D(const Json& entityObject, Entity& entity, std::string* error)
+{
+    const Json* physics = findField(entityObject, "physics2D");
+    if (!physics)
+        physics = findField(entityObject, "physics");
+    if (!physics)
+        return true;
+    if (!physics->is_object())
+    {
+        if (error)
+            *error = "Expected 'physics2D' to be an object";
+        return false;
+    }
+
+    PhysicsBody2D physicsBody;
+    physicsBody.enabled = true;
+
+    if (!readBoolField(*physics, "enabled", physicsBody.enabled, error))
+        return false;
+    if (!readBodyTypeField(*physics, "bodyType", physicsBody.bodyType, error))
+        return false;
+    if (!readBodyTypeField(*physics, "type", physicsBody.bodyType, error))
+        return false;
+    if (!applyBoxColliderFields(*physics, physicsBody.box, error))
+        return false;
+
+    const Json* box = findField(*physics, "box");
+    const Json* collider = findField(*physics, "collider");
+    const Json* colliderObject = box ? box : collider;
+    if (colliderObject)
+    {
+        if (!colliderObject->is_object())
+        {
+            if (error)
+                *error = box ? "Expected 'box' to be an object" : "Expected 'collider' to be an object";
+            return false;
+        }
+
+        if (!applyBoxColliderFields(*colliderObject, physicsBody.box, error))
+            return false;
+    }
+
+    entity.physics2D = physicsBody;
     return true;
 }
 
@@ -221,6 +326,8 @@ bool SceneLoader::loadFromText(const std::string& text, Scene& scene, std::strin
         if (!readBoolField(entityValue, "active", entity.active, error))
             return false;
         if (!applyTransform(entityValue, entity, error))
+            return false;
+        if (!applyPhysics2D(entityValue, entity, error))
             return false;
         if (!applyProperties(entityValue, entity, error))
             return false;

@@ -120,11 +120,16 @@ bool Engine::loadScene(const std::string& path, std::string* error)
     if (!SceneLoader::loadFromFile(resolvedPath, scene_, error))
         return false;
 
+    physics_.clear();
+    if (!physics_.attachSceneBodies(scene_, error))
+        return false;
+
     eventBus_.publish({"engine.scene_loaded",
                        {{"path", path},
                         {"resolvedPath", resolvedPath},
                         {"sceneName", scene_.name()},
-                        {"entityCount", std::to_string(scene_.entityCount())}}});
+                        {"entityCount", std::to_string(scene_.entityCount())},
+                        {"physicsBodyCount", std::to_string(physics_.bodyCount())}}});
     return true;
 }
 

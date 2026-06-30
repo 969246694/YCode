@@ -8,8 +8,34 @@
         "rotationDegrees": 0.0,
         "scale": [1.0, 1.0]
       },
+      "physics2D": {
+        "bodyType": "dynamic",
+        "box": {
+          "halfSizeMeters": [0.375, 0.375],
+          "fixedRotation": true
+        }
+      },
       "properties": {
         "kind": "prototype"
+      }
+    },
+    {
+      "name": "Sandbox Ground",
+      "transform": {
+        "position": [0.0, -160.0],
+        "rotationDegrees": 0.0,
+        "scale": [1.0, 1.0]
+      },
+      "physics2D": {
+        "bodyType": "static",
+        "box": {
+          "halfSizeMeters": [6.0, 0.25],
+          "density": 0.0,
+          "friction": 0.6
+        }
+      },
+      "properties": {
+        "kind": "static"
       }
     }
   ]
