@@ -33,7 +33,7 @@ if not exist "%VCPKG_INSTALLED%\include" (
 )
 
 cd /d "%ROOT%"
-cl /EHsc /utf-8 "%ROOT%\agent.cpp" /I "%VCPKG_INSTALLED%\include" /link /LIBPATH:"%VCPKG_INSTALLED%\lib" libcurl.lib shell32.lib /OUT:"%ROOT%\agent.exe"
+cl /EHsc /utf-8 "%ROOT%\agent.cpp" /I "%ROOT%\YCodeEngine\third_party" /I "%VCPKG_INSTALLED%\include" /link /LIBPATH:"%VCPKG_INSTALLED%\lib" libcurl.lib shell32.lib /OUT:"%ROOT%\agent.exe"
 if errorlevel 1 (
     echo Agent build failed.
     if not "%YCODE_NONINTERACTIVE%"=="1" pause

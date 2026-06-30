@@ -28,6 +28,8 @@ endif()
 target_include_directories(ycode_engine
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
 target_compile_features(ycode_engine PUBLIC cxx_std_17)

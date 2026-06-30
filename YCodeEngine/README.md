@@ -41,3 +41,7 @@ build\msvc2022_64\Release\ycode_engine_launcher.exe
 - `include/ycode/plugin.h`: plugin ABI
 - `include/ycode/plugin_loader.h`: dynamic plugin loader
 - `src/main.cpp`: launcher smoke test
+
+## Third-party
+
+- `third_party/nlohmann/`: vendored `nlohmann/json` headers, MIT license, used by `SceneLoader`.

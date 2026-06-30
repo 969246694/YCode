@@ -14,7 +14,8 @@ YCode 是一个 Windows 桌面 AI 编程助手项目，包含：
 - CMake 3.20+
 - Qt 6.8+，MSVC 2022 64-bit
 - vcpkg 安装的 `libcurl`
-- `nlohmann/json`
+
+`nlohmann/json` 已 vendor 到 `YCodeEngine/third_party/nlohmann/`，用于 Agent JSON 处理和 YCodeEngine 场景加载。
 
 ## 构建
 
