@@ -4,7 +4,7 @@ YCode 是一个 Windows 桌面 AI 编程助手项目，包含：
 
 - `agent.cpp`: 基于 DeepSeek API 的本地命令行 Agent。
 - `YZCodex/`: 使用 Qt 6 和 C++17 编写的图形客户端。
-- `YCodeEngine/`: YCode 内置 C++17 游戏引擎内核，提供事件总线、插件 ABI、插件加载器和游戏项目模板。
+- `YCodeEngine/`: YCode 内置 C++17 游戏引擎内核，提供场景、2D 物理、窗口绘制、事件总线、插件 ABI、插件加载器和游戏项目模板。
 - `build.bat`、`run_ycode.bat`、`manage_api_key.ps1`: Windows 下的构建、启动和 API Key 管理脚本。
 
 ## 依赖
@@ -15,7 +15,7 @@ YCode 是一个 Windows 桌面 AI 编程助手项目，包含：
 - Qt 6.8+，MSVC 2022 64-bit
 - vcpkg 安装的 `libcurl`
 
-`nlohmann/json` 已 vendor 到 `YCodeEngine/third_party/nlohmann/`，用于 Agent JSON 处理和 YCodeEngine 场景加载。
+`nlohmann/json` 已 vendor 到 `YCodeEngine/third_party/nlohmann/`，用于 Agent JSON 处理和 YCodeEngine 场景加载。`Box2D` 已 vendor 到 `YCodeEngine/third_party/box2d/`，用于 YCodeEngine 2D 物理。
 
 ## 构建
 
@@ -95,6 +95,7 @@ YCode 内部区分三个路径：
 
 - `EventBus`: 发布/订阅事件总线。
 - `Scene` / `Entity` / `Transform2D`: 轻量场景和游戏对象基础层。
+- `PhysicsWorld2D` / `BoxCollider2D`: 基于 Box2D 的 2D 刚体物理封装。
 - `ResourceManager` / `SceneLoader`: 读取项目资源并从 JSON 场景文件生成实体。
 - `PluginLoader`: 跨平台动态插件加载器。
 - `plugin.h`: 稳定 C ABI 插件接口。

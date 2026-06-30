@@ -1357,24 +1357,37 @@ R"(#include <ycode/core.h>
 
 namespace {
 
-void drawScene(ycode::Engine& engine, ycode::EntityId playerId, void* nativeDc, int width, int height)
+void drawBox(ycode::Canvas2D& canvas,
+             const ycode::Entity& entity,
+             int width,
+             int height,
+             float boxWidth,
+             float boxHeight,
+             ycode::Color fill)
 {
-    auto* entity = engine.scene().findEntity(playerId);
-    if (!entity)
-        return;
+    float centerX = static_cast<float>(width) * 0.5f + entity.transform.position.x;
+    float centerY = static_cast<float>(height) * 0.5f - entity.transform.position.y;
+    float left = centerX - boxWidth * 0.5f;
+    float top = centerY - boxHeight * 0.5f;
 
+    canvas.fillRect(left, top, boxWidth, boxHeight, fill);
+    canvas.strokeRect(left, top, boxWidth, boxHeight, ycode::Color{235, 245, 255, 255}, 2);
+}
+
+void drawScene(ycode::Engine& engine, ycode::EntityId playerId, ycode::EntityId groundId, void* nativeDc, int width, int height)
+{
     ycode::Canvas2D canvas(nativeDc, width, height);
-    float size = 48.0f * entity->transform.scale.x;
-    if (size < 16)
-        size = 16;
 
-    float centerX = static_cast<float>(width) * 0.5f + entity->transform.position.x;
-    float centerY = static_cast<float>(height) * 0.5f - entity->transform.position.y;
-    float left = centerX - size * 0.5f;
-    float top = centerY - size * 0.5f;
+    if (auto* ground = engine.scene().findEntity(groundId))
+        drawBox(canvas, *ground, width, height, 768.0f, 32.0f, ycode::Color{72, 92, 112, 255});
 
-    canvas.fillRect(left, top, size, size, ycode::Color{54, 162, 235, 255});
-    canvas.strokeRect(left, top, size, size, ycode::Color{235, 245, 255, 255}, 2);
+    if (auto* player = engine.scene().findEntity(playerId))
+    {
+        float size = 48.0f * player->transform.scale.x;
+        if (size < 16.0f)
+            size = 16.0f;
+        drawBox(canvas, *player, width, height, size, size, ycode::Color{54, 162, 235, 255});
+    }
 }
 
 } // namespace
@@ -1412,6 +1425,34 @@ int main()
     }
 
     ycode::EntityId playerId = player->id;
+    auto* ground = engine.scene().findEntityByName("Ground");
+    if (!ground)
+    {
+        std::cerr << "Startup scene does not contain 'Ground'" << std::endl;
+        return 1;
+    }
+
+    ycode::EntityId groundId = ground->id;
+
+    ycode::BoxCollider2D playerCollider;
+    playerCollider.halfSizeMeters = ycode::Vec2{0.375f, 0.375f};
+    playerCollider.fixedRotation = true;
+    if (!engine.physics().attachBox(engine.scene(), playerId, ycode::BodyType2D::Dynamic, playerCollider, &error))
+    {
+        std::cerr << "Failed to attach player physics body: " << error << std::endl;
+        return 1;
+    }
+
+    ycode::BoxCollider2D groundCollider;
+    groundCollider.halfSizeMeters = ycode::Vec2{6.0f, 0.25f};
+    groundCollider.density = 0.0f;
+    groundCollider.friction = 0.6f;
+    if (!engine.physics().attachBox(engine.scene(), groundId, ycode::BodyType2D::Static, groundCollider, &error))
+    {
+        std::cerr << "Failed to attach ground physics body: " << error << std::endl;
+        return 1;
+    }
+
     engine.scene().setUpdateHandler([&engine, playerId](ycode::Scene& scene, float deltaSeconds) {
         auto* entity = scene.findEntity(playerId);
         if (!entity || !entity->active)
@@ -1428,12 +1469,14 @@ int main()
         if (engine.window().isKeyDown(ycode::Key::Up) || engine.window().isKeyDown(ycode::Key::W))
             vertical += 1.0f;
 
-        constexpr float speed = 220.0f;
-        entity->transform.position.x += horizontal * speed * deltaSeconds;
-        entity->transform.position.y += vertical * speed * deltaSeconds;
+        ycode::Vec2 velocity = engine.physics().linearVelocity(playerId);
+        velocity.x = horizontal * 4.0f;
+        if (vertical != 0.0f)
+            velocity.y = vertical * 4.0f;
+        engine.physics().setLinearVelocity(playerId, velocity);
     });
-    engine.window().setPaintHandler([&engine, playerId](void* nativeDc, int width, int height) {
-        drawScene(engine, playerId, nativeDc, width, height);
+    engine.window().setPaintHandler([&engine, playerId, groundId](void* nativeDc, int width, int height) {
+        drawScene(engine, playerId, groundId, nativeDc, width, height);
     });
     engine.setRenderHandler([&engine]() {
         engine.window().invalidate();
@@ -1464,7 +1507,7 @@ This is a YCode game project powered by the built-in YCode Engine.
 
 ## Controls
 
-- Arrow keys or WASD: move the loaded `Player` entity.
+- Arrow keys or WASD: drive the loaded `Player` physics body.
 
 ## Build
 
@@ -1483,12 +1526,23 @@ R"({
     {
       "name": "Player",
       "transform": {
-        "position": [0.0, 0.0],
+        "position": [0.0, 80.0],
         "rotationDegrees": 0.0,
         "scale": [1.0, 1.0]
       },
       "properties": {
         "kind": "prototype"
+      }
+    },
+    {
+      "name": "Ground",
+      "transform": {
+        "position": [0.0, -160.0],
+        "rotationDegrees": 0.0,
+        "scale": [1.0, 1.0]
+      },
+      "properties": {
+        "kind": "static"
       }
     }
   ]
@@ -1602,7 +1656,7 @@ void MainWindow::openYCodeEngineFolder()
 void MainWindow::sendGameDevPrompt()
 {
     QString prompt = QString("进入 YCode 游戏开发模式。请基于内置 YCodeEngine 协助我设计、实现和调试游戏项目；"
-                             "优先使用 YCodeEngine 的 Scene/Entity/Transform2D、ResourceManager/SceneLoader JSON 场景加载、Key 输入枚举、Canvas2D 绘制、事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。"
+                             "优先使用 YCodeEngine 的 Scene/Entity/Transform2D、PhysicsWorld2D/BoxCollider2D 2D 物理、ResourceManager/SceneLoader JSON 场景加载、Key 输入枚举、Canvas2D 绘制、事件总线、插件 ABI、CMake 游戏项目模板和 C++17 工作流。"
                              "当前游戏工作区是: %1。")
                          .arg(workspacePath.isEmpty() ? QString("未打开") : workspacePath);
     inputField->setText(prompt);

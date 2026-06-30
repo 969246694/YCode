@@ -5,6 +5,7 @@
 #include "ycode/engine.h"
 #include "ycode/event_bus.h"
 #include "ycode/input.h"
+#include "ycode/physics2d.h"
 #include "ycode/plugin.h"
 #include "ycode/plugin_loader.h"
 #include "ycode/resource_manager.h"

@@ -8,6 +8,7 @@ It replaces the old standalone `YiyangzaiEngine` direction with a YCode-owned su
 - Event bus
 - Scene, entity, and transform model
 - Resource manager and JSON scene loader
+- Box2D-backed 2D rigid body physics
 - Minimal native window layer
 - `Key` input helpers and `Canvas2D` primitive drawing
 - Stable C ABI plugin contract
@@ -32,6 +33,7 @@ build\msvc2022_64\Release\ycode_engine_launcher.exe
 
 - `include/ycode/engine.h`: engine lifecycle
 - `include/ycode/resource_manager.h`: project-root resource lookup and text loading
+- `include/ycode/physics2d.h`: 2D rigid body physics facade backed by Box2D
 - `include/ycode/input.h`: engine-level key constants
 - `include/ycode/canvas2d.h`: tiny 2D drawing wrapper for paint callbacks
 - `include/ycode/scene.h`: scene, entity, and 2D transform model
@@ -45,3 +47,4 @@ build\msvc2022_64\Release\ycode_engine_launcher.exe
 ## Third-party
 
 - `third_party/nlohmann/`: vendored `nlohmann/json` headers, MIT license, used by `SceneLoader`.
+- `third_party/box2d/`: vendored Box2D 3.1.1 source, MIT license, used by `PhysicsWorld2D`.

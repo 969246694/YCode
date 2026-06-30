@@ -81,6 +81,7 @@ void Engine::tick()
     lastTick_ = now;
 
     scene_.update(deltaSeconds);
+    physics_.step(scene_, deltaSeconds);
 
     // Call user's render handler (if set) after the scene update.
     if (renderHandler_)
@@ -165,6 +166,16 @@ ResourceManager& Engine::resources()
 const ResourceManager& Engine::resources() const
 {
     return resources_;
+}
+
+PhysicsWorld2D& Engine::physics()
+{
+    return physics_;
+}
+
+const PhysicsWorld2D& Engine::physics() const
+{
+    return physics_;
 }
 
 Scene& Engine::scene()

@@ -2,6 +2,7 @@
 #define YCODE_ENGINE_H
 
 #include "ycode/event_bus.h"
+#include "ycode/physics2d.h"
 #include "ycode/plugin_loader.h"
 #include "ycode/resource_manager.h"
 #include "ycode/scene.h"
@@ -49,6 +50,8 @@ public:
     const PluginLoader& plugins() const;
     ResourceManager& resources();
     const ResourceManager& resources() const;
+    PhysicsWorld2D& physics();
+    const PhysicsWorld2D& physics() const;
     Scene& scene();
     const Scene& scene() const;
     Window& window();
@@ -61,6 +64,7 @@ private:
     EventBus eventBus_;
     PluginLoader pluginLoader_;
     ResourceManager resources_;
+    PhysicsWorld2D physics_;
     Scene scene_;
     Window window_;
     bool running_ = false;
