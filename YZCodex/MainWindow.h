@@ -23,6 +23,7 @@
 class ChatWidget;
 class CodeEditor;
 class AgentManager;
+class QSettings;
 
 class MainWindow : public QMainWindow
 {
@@ -61,6 +62,8 @@ private slots:
     void buildYCodeEngine();
     void openYCodeEngineFolder();
     void sendGameDevPrompt();
+    void showApiSettings();
+    void showPanelThemeSettings();
 
     // 视图切换
     void showFileExplorer();
@@ -103,6 +106,11 @@ private:
     bool saveAllModifiedFilesForSelfUpdate();
     bool startYCodeSelfUpdate(const QStringList &arguments = QStringList());
     bool reloadStyleSheet(bool notifyUser = true);
+    void applyPanelTheme();
+    void applyPanelThemeToEditor(CodeEditor *editor);
+    void loadPanelTheme(QSettings &settings);
+    void savePanelTheme(QSettings &settings) const;
+    QString panelThemePresetName(const QString &presetKey) const;
     bool writeTextFile(const QString &filePath, const QString &content);
     bool isYCodeGameProject(const QString &path) const;
     void runTerminalProcess(const QString &title, const QString &program, const QStringList &arguments, const QString &workingDirectory);
@@ -126,6 +134,7 @@ private:
 
     // 左侧面板 (文件浏览器 / 搜索)
     QWidget *leftSidebar;
+    QLabel *sidebarTitle;
     QTabWidget *leftSidebarTabs;
     QTreeView *fileTreeView;
     QFileSystemModel *fileSystemModel;
@@ -151,7 +160,9 @@ private:
 
     // 聊天面板 (右侧)
     QWidget *chatPanel;
+    QLabel *chatTitle;
     ChatWidget *chatDisplay;
+    QWidget *chatInputArea;
     QLineEdit *inputField;
     QPushButton *sendButton;
 
@@ -161,6 +172,7 @@ private:
     QPlainTextEdit *terminalOutput;
     QLineEdit *terminalInput;
     QListWidget *problemsList;
+    QPlainTextEdit *outputLog;
 
     // 状态栏组件
     QStatusBar *statusBar;
@@ -179,6 +191,20 @@ private:
     bool showBottomPanel;
     bool selfUpdateInProgress;
     int currentActivity;  // 0=Explorer, 1=Search, 2=Chat
+
+    struct PanelTheme {
+        QString preset = "dark";
+        QString panelBackground = "#252526";
+        QString surfaceBackground = "#1E1E1E";
+        QString elevatedBackground = "#2D2D30";
+        QString textColor = "#CCCCCC";
+        QString mutedTextColor = "#999999";
+        QString borderColor = "#3C3C3C";
+        QString accentColor = "#007ACC";
+        QString terminalTextColor = "#00FF00";
+    };
+
+    PanelTheme panelTheme;
 };
 
 #endif

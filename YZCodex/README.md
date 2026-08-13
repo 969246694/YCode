@@ -54,6 +54,8 @@ YCode 客户端会把 YCode 自身根目录和游戏工作区分开：Agent、�
 
 新建游戏项目会生成 CMake 入口、`src/main.cpp`、`scenes/main.scene.json`、`assets/` 和 `plugins/`。示例场景会在 JSON 中为 `Player` 和 `Ground` 声明 `physics2D` 刚体，YCodeEngine 加载场景时会自动绑定物理体；示例代码用 `Canvas2D` 绘制它们，并通过方向键或 WASD 驱动玩家物理速度。
 
+菜单 `设置 -> 面板主题...` 可切换预设面板主题，或自定义面板背景、内容背景、文本、边框、强调色和终端文字颜色；设置会通过 `QSettings` 持久保存。
+
 ## 配置
 
 运行前建议设置 DeepSeek API Key：
