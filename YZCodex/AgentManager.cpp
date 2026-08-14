@@ -173,6 +173,8 @@ void AgentManager::onReadyReadStandardOutput()
         const QString restartAgentSignal = "SIGNAL:RESTART_AGENT";
         const QString rebuildRestartYCodeSignal = "SIGNAL:REBUILD_RESTART_YCODE";
         const QString reloadStyleSignal = "SIGNAL:RELOAD_STYLE";
+        const QString assistantStartSignal = "SIGNAL:ASSISTANT_START";
+        const QString assistantEndSignal = "SIGNAL:ASSISTANT_END";
 
         if (output.contains(rebuildRestartYCodeSignal))
         {
@@ -221,6 +223,25 @@ void AgentManager::onReadyReadStandardOutput()
 
             // 触发重启（由 YCode 客户端接管）
             restart();
+            return;
+        }
+
+        // 助手流式输出起止标记：先发内容再切换状态，保证顺序正确
+        bool hasAssistantStart = output.contains(assistantStartSignal);
+        bool hasAssistantEnd = output.contains(assistantEndSignal);
+        if (hasAssistantStart || hasAssistantEnd)
+        {
+            QString userOutput = output;
+            userOutput.replace(assistantStartSignal, "");
+            userOutput.replace(assistantEndSignal, "");
+            userOutput = userOutput.trimmed();
+
+            if (hasAssistantStart)
+                emit assistantStreamStarted();
+            if (!userOutput.isEmpty())
+                emit outputReceived(userOutput);
+            if (hasAssistantEnd)
+                emit assistantStreamEnded();
             return;
         }
 

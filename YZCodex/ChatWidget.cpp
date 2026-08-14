@@ -66,6 +66,26 @@ void ChatWidget::appendAssistantMessage(const QString &message)
                        { scrollBar->setValue(scrollBar->maximum()); });
 }
 
+void ChatWidget::beginAssistantMessage()
+{
+    // 新一轮助手回复开始：后续 appendToLastAssistant 会创建全新气泡
+    lastAssistantLabel = nullptr;
+}
+
+void ChatWidget::appendToLastAssistant(const QString &delta)
+{
+    if (!lastAssistantLabel)
+    {
+        appendAssistantMessage(delta);
+        return;
+    }
+
+    lastAssistantLabel->setText(lastAssistantLabel->text() + delta);
+    QScrollBar *scrollBar = scrollArea->verticalScrollBar();
+    QTimer::singleShot(50, [scrollBar]()
+                       { scrollBar->setValue(scrollBar->maximum()); });
+}
+
 void ChatWidget::clear()
 {
     QLayoutItem *item;
@@ -77,6 +97,7 @@ void ChatWidget::clear()
         }
         delete item;
     }
+    lastAssistantLabel = nullptr;
 }
 
 void ChatWidget::applyTheme(const QString &newPanelBackground,
@@ -191,6 +212,9 @@ QWidget *ChatWidget::createMessageWidget(const QString &message, bool isUser)
     messageLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     messageLabel->setMaximumWidth(400);
     styleMessageLabel(messageLabel, isUser);
+
+    // 记录最近一个助手消息的文本标签，供流式追加使用
+    lastAssistantLabel = isUser ? nullptr : messageLabel;
 
     // 消息时间标签
     QLabel *timeLabel = new QLabel(QDateTime::currentDateTime().toString("HH:mm"));

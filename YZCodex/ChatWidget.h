@@ -18,6 +18,8 @@ public:
 
     void appendUserMessage(const QString &message);
     void appendAssistantMessage(const QString &message);
+    void beginAssistantMessage();          // 标记新一轮助手回复开始（后续内容追加到新气泡）
+    void appendToLastAssistant(const QString &delta); // 流式追加到当前助手气泡
     void clear();
     void applyTheme(const QString &panelBackground,
                     const QString &surfaceBackground,
@@ -44,6 +46,7 @@ private:
     QString borderColor;
     QString accentColor;
     QString assistantAccentColor;
+    QLabel *lastAssistantLabel = nullptr; // 最近一个助手消息的文本标签
 };
 
 #endif

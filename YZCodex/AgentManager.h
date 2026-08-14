@@ -28,6 +28,8 @@ signals:
     void agentRestarting();        // ★ 新增：agent 正在重启信号
     void ycodeSelfUpdateRequested();
     void reloadStyleRequested();
+    void assistantStreamStarted(); // 助手流式输出开始
+    void assistantStreamEnded();   // 助手流式输出结束
 
 private slots:
     void onReadyReadStandardOutput();

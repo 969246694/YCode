@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 流式输出
+
+- Agent 改为流式调用 DeepSeek API（`stream: true`），正文边生成边打印，不再"干等几十秒一次性输出"。
+- 新增 `SIGNAL:ASSISTANT_START` / `SIGNAL:ASSISTANT_END` 信号，配合客户端把流式内容追加到同一个助手气泡，而非每个分块一个气泡。
+- 托管模式下 Agent 不再打印 `你:` / `Agent:` REPL 提示符，聊天界面更干净。
+- 客户端 `ChatWidget` 新增 `beginAssistantMessage` / `appendToLastAssistant` 流式追加能力。
+
 ### 安全
 
 - 恢复 `agent.cpp` 中两处 `CURLOPT_SSL_VERIFYPEER` 证书校验（下载与 API 调用均启用 TLS 校验）。

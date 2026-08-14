@@ -26,6 +26,8 @@ const std::string SESSION_FILE = "agent_session.json";
 const std::string SIGNAL_RESTART_AGENT = "SIGNAL:RESTART_AGENT";
 const std::string SIGNAL_REBUILD_RESTART_YCODE = "SIGNAL:REBUILD_RESTART_YCODE";
 const std::string SIGNAL_RELOAD_STYLE = "SIGNAL:RELOAD_STYLE";
+const std::string SIGNAL_ASSISTANT_START = "SIGNAL:ASSISTANT_START";
+const std::string SIGNAL_ASSISTANT_END = "SIGNAL:ASSISTANT_END";
 
 // ============================================================
 // HTTP 回调
@@ -270,6 +272,97 @@ static bool isDangerousCommand(const std::string &command)
         statement.clear();
     }
     return false;
+}
+
+// ============================================================
+// 流式响应（SSE）解析 — 实时打印正文并累积 tool_calls
+// ============================================================
+struct ToolCallAcc
+{
+    std::string id;
+    std::string name;
+    std::string arguments;
+};
+
+struct StreamContext
+{
+    std::string raw;                       // 原始响应体（错误报告用）
+    std::string lineBuffer;                // SSE 行缓冲
+    std::string content;                   // 累积的正文
+    std::vector<ToolCallAcc> toolCallAcc;  // 按 index 累积的 tool_calls
+    bool contentStarted = false;           // 是否已开始输出正文（用于包裹流式起止信号）
+};
+
+size_t StreamWriteCallback(void *ptr, size_t size, size_t nmemb, void *userdata)
+{
+    StreamContext *ctx = static_cast<StreamContext *>(userdata);
+    size_t total = size * nmemb;
+    const char *data = static_cast<const char *>(ptr);
+    ctx->raw.append(data, total);
+    ctx->lineBuffer.append(data, total);
+
+    size_t pos;
+    while ((pos = ctx->lineBuffer.find('\n')) != std::string::npos)
+    {
+        std::string line = ctx->lineBuffer.substr(0, pos);
+        ctx->lineBuffer.erase(0, pos + 1);
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+
+        if (line.rfind("data:", 0) != 0)
+            continue;
+
+        std::string payload = line.substr(5);
+        size_t first = payload.find_first_not_of(' ');
+        if (first == std::string::npos)
+            continue;
+        payload = payload.substr(first);
+        if (payload == "[DONE]")
+            continue;
+
+        try
+        {
+            json chunk = json::parse(payload);
+            if (!chunk.contains("choices") || chunk["choices"].empty())
+                continue;
+            const json &delta = chunk["choices"][0]["delta"];
+
+            if (delta.contains("content") && delta["content"].is_string())
+            {
+                std::string text = delta["content"].get<std::string>();
+                if (!ctx->contentStarted)
+                {
+                    ctx->contentStarted = true;
+                    std::cout << SIGNAL_ASSISTANT_START << std::endl;
+                }
+                ctx->content += text;
+                std::cout << text << std::flush; // 流式打印正文
+            }
+
+            if (delta.contains("tool_calls") && delta["tool_calls"].is_array())
+            {
+                for (const auto &tc : delta["tool_calls"])
+                {
+                    int index = tc.value("index", 0);
+                    if (index >= static_cast<int>(ctx->toolCallAcc.size()))
+                        ctx->toolCallAcc.resize(index + 1);
+                    ToolCallAcc &acc = ctx->toolCallAcc[index];
+                    if (tc.contains("id") && tc["id"].is_string())
+                        acc.id = tc["id"].get<std::string>();
+                    if (tc.contains("function"))
+                    {
+                        const json &fn = tc["function"];
+                        if (fn.contains("name") && fn["name"].is_string())
+                            acc.name = fn["name"].get<std::string>();
+                        if (fn.contains("arguments") && fn["arguments"].is_string())
+                            acc.arguments += fn["arguments"].get<std::string>();
+                    }
+                }
+            }
+        }
+        catch (const json::exception &) { /* 忽略无法解析的行 */ }
+    }
+    return total;
 }
 
 // ============================================================
@@ -777,7 +870,7 @@ private:
         return "未知工具: " + toolName;
     }
 
-    std::string callAPI(const json &messages, int retryCount = 0)
+    std::string callAPIStream(const json &messages, StreamContext &ctx, int retryCount = 0)
     {
         CURL *curl = curl_easy_init();
         if (!curl) return "Error: CURL init failed";
@@ -787,7 +880,7 @@ private:
         requestJson["messages"] = messages;
         requestJson["tools"] = getTools();
         requestJson["tool_choice"] = "auto";
-        requestJson["stream"] = false;
+        requestJson["stream"] = true;
         requestJson["temperature"] = temperature;
         requestJson["max_tokens"] = 8192;
 
@@ -796,12 +889,11 @@ private:
         headers = curl_slist_append(headers, "Content-Type: application/json");
         headers = curl_slist_append(headers, ("Authorization: Bearer " + apiKey).c_str());
 
-        std::string responseBuffer;
         curl_easy_setopt(curl, CURLOPT_URL, apiUrl.c_str());
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, StreamWriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
 
@@ -811,37 +903,43 @@ private:
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
 
+        bool nothingReceived = ctx.content.empty() && ctx.toolCallAcc.empty();
+
         if (res != CURLE_OK)
         {
-            if (retryCount < API_MAX_RETRIES)
+            if (retryCount < API_MAX_RETRIES && nothingReceived)
             {
+                ctx.raw.clear();
+                ctx.lineBuffer.clear();
                 std::cerr << "  重试 (" << (retryCount + 1) << "/" << API_MAX_RETRIES << ")..." << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (retryCount + 1)));
-                return callAPI(messages, retryCount + 1);
+                return callAPIStream(messages, ctx, retryCount + 1);
             }
             return "CURL Error: " + std::string(curl_easy_strerror(res));
         }
 
         if (httpCode == 429 || httpCode >= 500)
         {
-            if (retryCount < API_MAX_RETRIES)
+            if (retryCount < API_MAX_RETRIES && nothingReceived)
             {
+                ctx.raw.clear();
+                ctx.lineBuffer.clear();
                 std::cerr << "  HTTP " << httpCode << " 重试..." << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(2000 * (retryCount + 1)));
-                return callAPI(messages, retryCount + 1);
+                return callAPIStream(messages, ctx, retryCount + 1);
             }
         }
 
         if (httpCode != 200)
         {
-            std::string body = responseBuffer;
+            std::string body = ctx.raw;
             if (body.length() > 500)
                 body = body.substr(0, 500) + "...";
             return "HTTP Error: " + std::to_string(httpCode) +
                    (body.empty() ? "" : " - " + body);
         }
 
-        return responseBuffer;
+        return "";
     }
 
 public:
@@ -865,63 +963,67 @@ public:
             for (const auto &msg : conversationHistory)
                 messages.push_back(msg);
 
-            std::string responseBuffer = callAPI(messages);
+            StreamContext ctx;
+            std::string apiError = callAPIStream(messages, ctx);
+            if (!apiError.empty())
+                return apiError;
 
-            try
+            // 依据流式累积结果重建 assistant 消息
+            json assistantMsg;
+            assistantMsg["role"] = "assistant";
+            assistantMsg["content"] = ctx.content.empty() ? json(nullptr) : json(ctx.content);
+
+            json toolCalls = json::array();
+            for (const auto &acc : ctx.toolCallAcc)
             {
-                json responseJson = json::parse(responseBuffer);
-                if (responseJson.contains("choices") && !responseJson["choices"].empty())
+                json tc;
+                tc["id"] = acc.id;
+                tc["type"] = "function";
+                tc["function"]["name"] = acc.name;
+                tc["function"]["arguments"] = acc.arguments.empty() ? std::string("{}") : acc.arguments;
+                toolCalls.push_back(tc);
+            }
+            if (!toolCalls.empty())
+                assistantMsg["tool_calls"] = toolCalls;
+
+            conversationHistory.push_back(assistantMsg);
+
+            if (!toolCalls.empty())
+            {
+                if (iteration == 0 && !userMessage.empty())
+                    std::cout << "\n  [Agent 正在使用工具...]" << std::endl;
+
+                for (const auto &tc : toolCalls)
                 {
-                    json assistantMsg = responseJson["choices"][0]["message"];
-                    conversationHistory.push_back(assistantMsg);
+                    const json &function = tc["function"];
+                    std::string toolName = function.value("name", std::string("unknown_tool"));
+                    std::cout << "  调用: " << toolName << std::endl;
 
-                    if (assistantMsg.contains("tool_calls") && !assistantMsg["tool_calls"].empty())
+                    std::string toolResult;
+                    try
                     {
-                        if (iteration == 0 && !userMessage.empty())
-                            std::cout << "\n  [Agent 正在使用工具...]" << std::endl;
-
-                        for (const auto &toolCall : assistantMsg["tool_calls"])
-                        {
-                            const json &function = toolCall["function"];
-                            std::string toolName = function.value("name", std::string("unknown_tool"));
-                            std::cout << "  调用: " << toolName << std::endl;
-
-                            std::string toolResult;
-                            try
-                            {
-                                std::string argsStr = function.value("arguments", std::string("{}"));
-                                json toolArgs = json::parse(argsStr);
-                                toolResult = executeTool(toolName, toolArgs);
-                            }
-                            catch (const json::exception &e)
-                            {
-                                toolResult = "Tool Error: 工具参数解析失败 - " + std::string(e.what());
-                            }
-
-                            conversationHistory.push_back({{"role", "tool"},
-                                                           {"tool_call_id", toolCall.value("id", std::string("unknown_id"))},
-                                                           {"content", toolResult}});
-                        }
-                        continue;
+                        std::string argsStr = function.value("arguments", std::string("{}"));
+                        json toolArgs = json::parse(argsStr);
+                        toolResult = executeTool(toolName, toolArgs);
                     }
-                    else
+                    catch (const json::exception &e)
                     {
-                        std::string content = assistantMsg.contains("content") && assistantMsg["content"].is_string()
-                            ? assistantMsg["content"].get<std::string>()
-                            : std::string();
-                        if (conversationHistory.size() > 20)
-                            trimHistory(conversationHistory);
-                        return content;
+                        toolResult = "Tool Error: 工具参数解析失败 - " + std::string(e.what());
                     }
+
+                    conversationHistory.push_back({{"role", "tool"},
+                                                   {"tool_call_id", tc.value("id", std::string("unknown_id"))},
+                                                   {"content", toolResult}});
                 }
-                else if (responseJson.contains("error"))
-                    return "API Error: " + responseJson["error"].value("message", std::string("unknown error"));
-                return "Unknown response format";
+                continue;
             }
-            catch (const json::exception &e)
-            {
-                return "JSON Parse Error: " + std::string(e.what());
-            }
+
+            // 正文已在流式回调中打印，返回空串避免二次输出
+            if (ctx.contentStarted)
+                std::cout << SIGNAL_ASSISTANT_END << std::endl;
+            if (conversationHistory.size() > 20)
+                trimHistory(conversationHistory);
+            return "";
         }
         return "达到最大工具调用次数限制";
     }
@@ -1025,12 +1127,17 @@ int main(int argc, char *argv[])
     std::string input;
     std::vector<json> conversationHistory;
 
+    // 托管模式下由 Qt 客户端负责展示用户/助手角色，跳过 REPL 提示符
+    const char *managedEnv = std::getenv("YCODE_MANAGED");
+    bool managed = managedEnv && std::string(managedEnv) == "1";
+
     std::cout << "\n命令: /exit /clear /save /load /restart /self-update /apply-self-changes /temp 0.5 /model name /allow-dangerous /deny-dangerous /help" << std::endl;
     std::cout << "----------------------------------------" << std::endl;
 
     while (true)
     {
-        std::cout << "\n你: ";
+        if (!managed)
+            std::cout << "\n你: ";
         std::getline(std::cin, input);
 
         if (input == "/exit" || input == "/quit")
@@ -1118,7 +1225,8 @@ int main(int argc, char *argv[])
         if (input == "/help") { std::cout << "YCode Agent v2.0 - 14个工具的全能编程助手 | apply_self_changes 按路径热加载/重建/重启 | /restart 重启 Agent | /self-update 重建并重启 YCode | /allow-dangerous 授权危险命令 | /deny-dangerous 撤销授权" << std::endl; continue; }
         if (input.empty()) continue;
 
-        std::cout << "Agent: " << std::flush;
+        if (!managed)
+            std::cout << "Agent: " << std::flush;
         std::string response = agent.chat(input, conversationHistory);
         std::cout << response << std::endl;
         agent.saveSession(conversationHistory); // 每次响应后自动保存，避免崩溃丢失历史

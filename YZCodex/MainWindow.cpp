@@ -78,6 +78,7 @@ MainWindow::MainWindow(QWidget *parent)
       outputLog(nullptr),
       showBottomPanel(true),
       selfUpdateInProgress(false),
+      assistantStreaming(false),
       currentActivity(0)
 {
     QString iconPath = defaultIconPath();
@@ -133,6 +134,8 @@ void MainWindow::connectAgentSignals()
     connect(agentManager, &AgentManager::agentRestarting, this, &MainWindow::onAgentRestarting);
     connect(agentManager, &AgentManager::ycodeSelfUpdateRequested, this, &MainWindow::onYCodeSelfUpdateRequested);
     connect(agentManager, &AgentManager::reloadStyleRequested, this, &MainWindow::onReloadStyleRequested);
+    connect(agentManager, &AgentManager::assistantStreamStarted, this, &MainWindow::onAssistantStreamStarted);
+    connect(agentManager, &AgentManager::assistantStreamEnded, this, &MainWindow::onAssistantStreamEnded);
 }
 
 // ============================================================
@@ -1487,6 +1490,7 @@ void MainWindow::sendMessage()
 
     inputField->clear();
     appendToChat(message, true);
+    assistantStreaming = false; // 新消息开始，终止上一轮流式状态
 
     if (agentManager && agentManager->isRunning())
     {
@@ -1893,7 +1897,10 @@ void MainWindow::sendGameDevPrompt()
 
 void MainWindow::onAgentOutput(const QString &output)
 {
-    appendToChat(output, false);
+    if (assistantStreaming)
+        chatDisplay->appendToLastAssistant(output);
+    else
+        appendToChat(output, false);
     statusMessage->setText("就绪");
 }
 
@@ -1913,6 +1920,19 @@ void MainWindow::onAgentRestarting()
 {
     appendToChat("🔄 Agent 进程正在重启，请稍候...", false);
     statusMessage->setText("Agent 重启中...");
+}
+
+void MainWindow::onAssistantStreamStarted()
+{
+    assistantStreaming = true;
+    chatDisplay->beginAssistantMessage();
+    statusMessage->setText("Agent 正在回复...");
+}
+
+void MainWindow::onAssistantStreamEnded()
+{
+    assistantStreaming = false;
+    statusMessage->setText("就绪");
 }
 
 void MainWindow::onYCodeSelfUpdateRequested()

@@ -54,6 +54,8 @@ private slots:
     void onAgentRestarting();            // ★ 新增：agent 正在重启
     void onYCodeSelfUpdateRequested();
     void onReloadStyleRequested();
+    void onAssistantStreamStarted();
+    void onAssistantStreamEnded();
     void checkForUpdates();
     void createGameProject();
     void openGameProject();
@@ -191,6 +193,7 @@ private:
     QString apiKey;
     bool showBottomPanel;
     bool selfUpdateInProgress;
+    bool assistantStreaming;  // 助手正在流式输出
     int currentActivity;  // 0=Explorer, 1=Search, 2=Chat
 
     struct PanelTheme {
