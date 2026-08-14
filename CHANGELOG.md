@@ -45,7 +45,7 @@
 - 新增 `YCodeEngine/tests/engine_tests.cpp`：覆盖 EventBus（含重入退订）、Scene、SceneLoader、ResourceManager、PhysicsWorld2D（含重力下落）、Engine 生命周期与文件读写路径。
 - 新增 `tests/agent_logic_tests.cpp`：覆盖危险命令识别、shell 元字符防护与 SSE 流式解析（45 项断言，Windows 本地运行，需 vcpkg libcurl）。
 - `YCodeEngine/CMakeLists.txt` 接入 CTest，`ctest` 一键运行全部单元测试。
-- 新增 `.github/workflows/ci.yml`：每次 push / pull request 自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行测试。
+- 新增 `.github/workflows/ci.yml`：每次 push / pull request 自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行测试；并在 Windows 上构建 `agent.exe` 与运行 agent 逻辑测试。
 
 ### 文档
 

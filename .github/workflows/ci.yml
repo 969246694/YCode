@@ -24,5 +24,28 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
-  # agent.exe 依赖 vcpkg 提供的 libcurl，Qt 客户端依赖 Qt6，两者暂未纳入 CI。
-  # 待补充：使用 vcpkg manifest 固化依赖后，可在此增加 agent 的编译与冒烟测试。
+  # agent.exe 依赖 vcpkg 提供的 libcurl；Qt 客户端依赖 Qt6，暂未纳入 CI。
+  agent:
+    name: Agent (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install curl via vcpkg
+        shell: bash
+        run: vcpkg install curl:x64-windows
+
+      - name: Build agent.exe
+        shell: cmd
+        run: |
+          set YCODE_NONINTERACTIVE=1
+          build.bat
+
+      - name: Compile agent logic tests
+        shell: cmd
+        run: cl /nologo /EHsc /utf-8 tests\agent_logic_tests.cpp /I YCodeEngine\third_party /I C:\vcpkg\installed\x64-windows\include /link /LIBPATH:C:\vcpkg\installed\x64-windows\lib libcurl.lib shell32.lib /OUT:agent_tests.exe
+
+      - name: Run agent logic tests
+        shell: cmd
+        run: agent_tests.exe

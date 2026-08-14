@@ -66,7 +66,7 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-GitHub Actions 会在每次 push / pull request 时自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行这些测试（见 `.github/workflows/ci.yml`）。
+GitHub Actions 会在每次 push / pull request 时自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行这些测试；同时会在 Windows 上构建 `agent.exe` 并运行 agent 逻辑测试（见 `.github/workflows/ci.yml`）。
 
 ## 配置
 
