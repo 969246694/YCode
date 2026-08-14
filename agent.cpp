@@ -1139,6 +1139,8 @@ int main(int argc, char *argv[])
         if (!managed)
             std::cout << "\n你: ";
         std::getline(std::cin, input);
+        if (std::cin.eof())
+            break; // 标准输入关闭（如客户端退出），干净退出避免空转
 
         if (input == "/exit" || input == "/quit")
         {

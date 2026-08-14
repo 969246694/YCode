@@ -28,6 +28,7 @@
 - 每次 Agent 响应后自动保存会话，避免进程崩溃丢失对话历史。
 - 统一历史裁剪阈值（`trimHistory` 与调用处一致保留最近 20 条）。
 - 修正系统提示词字符串拼接缺空格的问题，改用 `\n` 分隔。
+- 修复标准输入关闭时 Agent 无限空转的问题（EOF 时干净退出）。
 
 ### YZCodex（Qt 客户端）
 
@@ -42,6 +43,7 @@
 ### 测试与 CI
 
 - 新增 `YCodeEngine/tests/engine_tests.cpp`：覆盖 EventBus（含重入退订）、Scene、SceneLoader、ResourceManager、PhysicsWorld2D（含重力下落）、Engine 生命周期与文件读写路径。
+- 新增 `tests/agent_logic_tests.cpp`：覆盖危险命令识别、shell 元字符防护与 SSE 流式解析（45 项断言，Windows 本地运行，需 vcpkg libcurl）。
 - `YCodeEngine/CMakeLists.txt` 接入 CTest，`ctest` 一键运行全部单元测试。
 - 新增 `.github/workflows/ci.yml`：每次 push / pull request 自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行测试。
 
