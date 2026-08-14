@@ -28,6 +28,11 @@ jobs:
   agent:
     name: Agent (Windows)
     runs-on: windows-latest
+    env:
+      # 运行器上 VCPKG_ROOT 默认指向 VS 自带的 vcpkg，显式指向独立的 C:\vcpkg，
+      # 与 `vcpkg install` 的安装目录保持一致，build.bat 才能找到头文件/库。
+      VCPKG_ROOT: C:\vcpkg
+      VCPKG_TRIPLET: x64-windows
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
