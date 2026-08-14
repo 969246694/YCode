@@ -13,6 +13,7 @@ $shortcut.TargetPath = $target
 $shortcut.WorkingDirectory = $workingDir
 $shortcut.IconLocation = "$iconPath,0"
 $shortcut.Description = 'YCode - DeepSeek AI programming assistant'
+$shortcut.WindowStyle = 7   # 最小化启动，命令行窗口不再占屏
 $shortcut.Save()
 
 Write-Host "YCode desktop shortcut updated." -ForegroundColor Green

@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 启动
+
+- `run_ycode.bat` 改为用 `reg query` 直接读注册表获取 API Key，不再调用 PowerShell（此前每次调用会加载约 4 秒的 PowerShell 配置文件，共约 8 秒），启动等待从约 8 秒降至不足 1 秒。
+- 桌面与开始菜单快捷方式改为最小化启动（`WindowStyle=7`），命令行窗口一闪即过，不再占屏。
+
 ### 流式输出
 
 - Agent 改为流式调用 DeepSeek API（`stream: true`），正文边生成边打印，不再"干等几十秒一次性输出"。
