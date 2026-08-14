@@ -24,6 +24,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM vcvarsall may override VCPKG_ROOT to the VS-bundled vcpkg (which has no installed packages).
+REM If the current VCPKG_ROOT has no installed headers, fall back to C:\vcpkg.
+if not defined VCPKG_TRIPLET set "VCPKG_TRIPLET=x64-windows"
+if not exist "%VCPKG_ROOT%\installed\%VCPKG_TRIPLET%\include" (
+    if exist "C:\vcpkg\installed\%VCPKG_TRIPLET%\include" set "VCPKG_ROOT=C:\vcpkg"
+)
+
 set "VCPKG_INSTALLED=%VCPKG_ROOT%\installed\%VCPKG_TRIPLET%"
 if not exist "%VCPKG_INSTALLED%\include" (
     echo Failed to find vcpkg include directory: %VCPKG_INSTALLED%\include

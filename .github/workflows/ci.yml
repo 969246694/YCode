@@ -44,9 +44,6 @@ jobs:
       - name: Build agent.exe
         shell: cmd
         run: |
-          REM ilammy/msvc-dev-cmd 会用 VS 自带 vcpkg 覆盖 VCPKG_ROOT，这里显式覆盖回来
-          set VCPKG_ROOT=C:\vcpkg
-          set VCPKG_TRIPLET=x64-windows
           set YCODE_NONINTERACTIVE=1
           build.bat
 
