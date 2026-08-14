@@ -937,7 +937,16 @@ private:
 
 public:
     DeepSeekAgent(const std::string &key, const std::string &projectDir = ".")
-        : apiKey(key), projectPath(projectDir) {}
+        : apiKey(key), projectPath(projectDir)
+    {
+        // 支持通过环境变量覆盖 API 地址与模型（便于切换到兼容端点或其它模型）
+        const char *envUrl = std::getenv("YCODE_API_URL");
+        if (envUrl && *envUrl)
+            apiUrl = envUrl;
+        const char *envModel = std::getenv("YCODE_MODEL");
+        if (envModel && *envModel)
+            modelName = envModel;
+    }
 
     void setTemperature(double t) { temperature = t; }
     void setModel(const std::string &m) { modelName = m; }

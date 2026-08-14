@@ -84,6 +84,15 @@ GitHub Actions 会在每次 push / pull request 时自动在 Ubuntu 与 Windows 
 set DEEPSEEK_API_KEY=your-api-key-here
 ```
 
+可选环境变量（不设置则用默认值）：
+
+- `YCODE_API_URL`：API 端点地址，默认 `https://api.deepseek.com/v1/chat/completions`（兼容 OpenAI 格式的端点均可）。
+- `YCODE_MODEL`：模型名，默认 `deepseek-v4-pro`。
+
+```bat
+set YCODE_MODEL=deepseek-chat
+```
+
 也可以使用：
 
 ```powershell
