@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+# 源文件统一按 UTF-8 解释，避免中文注释在 GBK 代码页下被误读
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network)
 
 qt_standard_project_setup()
@@ -12,6 +17,9 @@ qt_standard_project_setup()
 set(SOURCES
     main.cpp
     MainWindow.cpp
+    MainWindowUi.cpp
+    MainWindowTheme.cpp
+    MainWindowGame.cpp
     ChatWidget.cpp
     CodeEditor.cpp
     AgentManager.cpp

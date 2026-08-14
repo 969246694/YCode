@@ -34,6 +34,7 @@
 ### YZCodex（Qt 客户端）
 
 - 修复关闭窗口时多标签页场景下保存错文件的问题：`closeEvent` 现在对每个已修改的标签页直接调用 `saveEditorToFile` 保存，而非误存当前标签页；「另存为」被取消时会中止关闭，避免误丢改动。
+- 将约 2800 行的 `MainWindow.cpp` 按职责拆分为 4 个文件：`MainWindow.cpp`（核心逻辑与回调）、`MainWindowUi.cpp`（界面搭建）、`MainWindowTheme.cpp`（主题与配色）、`MainWindowGame.cpp`（游戏开发），纯重构、行为不变。
 
 ### YCodeEngine
 
