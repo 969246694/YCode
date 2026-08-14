@@ -24,6 +24,8 @@ class ChatWidget;
 class CodeEditor;
 class AgentManager;
 class QSettings;
+class QFileSystemWatcher;
+class QTimer;
 
 class MainWindow : public QMainWindow
 {
@@ -61,6 +63,10 @@ private slots:
     void openGameProject();
     void buildGameProject();
     void runGameProject();
+    void runGamePreview();        // ★ 实时预览：构建并运行
+    void stopGamePreview();       // ★ 停止预览
+    void onGameSourceChanged();   // ★ 游戏项目文件变更
+    void reloadPreviewDebounced();// ★ 防抖后重建并重启预览
     void buildYCodeEngine();
     void openYCodeEngineFolder();
     void sendGameDevPrompt();
@@ -123,6 +129,10 @@ private:
     QString ycodeEnginePath() const;
     QString activeWorkspacePath() const;
     QString gameExecutablePath(const QString &projectPath) const;
+    void startPreviewBuild();      // 异步构建游戏项目
+    void launchPreviewProcess();   // 启动游戏进程
+    void stopPreviewProcess();     // 停止游戏进程
+    void setupPreviewWatcher();    // 建立源码/场景文件监视
 
     // ============ 布局组件 ============
     // 活动栏 (最左侧)
@@ -195,6 +205,12 @@ private:
     bool selfUpdateInProgress;
     bool assistantStreaming;  // 助手正在流式输出
     int currentActivity;  // 0=Explorer, 1=Search, 2=Chat
+
+    // 实时预览（游戏开发）
+    QProcess *previewProcess;      // 游戏进程
+    QProcess *previewBuildProc;    // 构建进程
+    QFileSystemWatcher *previewWatcher; // 监视游戏项目源码/场景
+    QTimer *previewDebounceTimer;  // 文件变更防抖
 
     struct PanelTheme {
         QString preset = "dark";

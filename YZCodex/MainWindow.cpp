@@ -44,7 +44,11 @@ MainWindow::MainWindow(QWidget *parent)
       showBottomPanel(true),
       selfUpdateInProgress(false),
       assistantStreaming(false),
-      currentActivity(0)
+      currentActivity(0),
+      previewProcess(nullptr),
+      previewBuildProc(nullptr),
+      previewWatcher(nullptr),
+      previewDebounceTimer(nullptr)
 {
     QString iconPath = defaultIconPath();
     if (!iconPath.isEmpty())
@@ -1022,6 +1026,8 @@ void MainWindow::updateFileTree(const QString &path)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    stopGamePreview(); // 关闭时停止实时预览的游戏与构建进程
+
     if (!selfUpdateInProgress)
     {
         // 保存所有未保存的文件

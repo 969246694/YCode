@@ -32,6 +32,7 @@
 #include <QTimer>
 #include <QProcessEnvironment>
 #include <QVector>
+#include <QFileSystemWatcher>
 
 void MainWindow::createGameProject()
 {
@@ -403,5 +404,159 @@ void MainWindow::sendGameDevPrompt()
 }
 
 // ============================================================
-// Agent 回调
+// 实时预览：构建并运行游戏，修改源码/场景后自动重建并重启
 // ============================================================
+void MainWindow::runGamePreview()
+{
+    if (workspacePath.isEmpty() || !isYCodeGameProject(workspacePath))
+    {
+        QMessageBox::information(this, "没有游戏项目", "请先在 游戏开发 菜单中新建或打开 YCode 游戏项目。");
+        return;
+    }
+
+    stopPreviewProcess();
+    terminalOutput->appendPlainText("== 实时预览：开始构建 ==");
+    startPreviewBuild();
+}
+
+void MainWindow::stopGamePreview()
+{
+    stopPreviewProcess();
+    if (previewBuildProc)
+    {
+        previewBuildProc->kill();
+        previewBuildProc->waitForFinished(1000);
+        previewBuildProc->deleteLater();
+        previewBuildProc = nullptr;
+    }
+    if (previewWatcher)
+        previewWatcher->removePaths(previewWatcher->files() + previewWatcher->directories());
+    statusMessage->setText("预览已停止");
+}
+
+void MainWindow::startPreviewBuild()
+{
+    if (previewBuildProc)
+    {
+        previewBuildProc->kill();
+        previewBuildProc->deleteLater();
+        previewBuildProc = nullptr;
+    }
+
+    previewBuildProc = new QProcess(this);
+    previewBuildProc->setWorkingDirectory(workspacePath);
+    previewBuildProc->setProcessChannelMode(QProcess::MergedChannels);
+
+    connect(previewBuildProc, &QProcess::readyReadStandardOutput, this, [this]() {
+        terminalOutput->appendPlainText(QString::fromLocal8Bit(previewBuildProc->readAll()));
+    });
+    connect(previewBuildProc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this](int exitCode, QProcess::ExitStatus) {
+        if (exitCode == 0)
+        {
+            terminalOutput->appendPlainText("== 构建成功，启动游戏 ==");
+            launchPreviewProcess();
+            setupPreviewWatcher();
+            statusMessage->setText("实时预览运行中：修改源码/场景后自动重建并重启");
+        }
+        else
+        {
+            appendToChat("⚠️ 预览构建失败，请查看终端输出", false);
+            statusMessage->setText("预览构建失败");
+        }
+        previewBuildProc->deleteLater();
+        previewBuildProc = nullptr;
+    });
+
+    QString command = "cmake -S . -B build\\msvc2022_64 -A x64 && "
+                      "cmake --build build\\msvc2022_64 --config Release";
+    terminalOutput->appendPlainText("> " + command);
+    previewBuildProc->start("cmd.exe", QStringList() << "/c" << command);
+}
+
+void MainWindow::launchPreviewProcess()
+{
+    stopPreviewProcess();
+    QString exe = gameExecutablePath(workspacePath);
+    if (!QFileInfo::exists(exe))
+    {
+        appendToChat("未找到游戏可执行文件: " + exe, false);
+        return;
+    }
+
+    previewProcess = new QProcess(this);
+    previewProcess->setWorkingDirectory(workspacePath);
+    previewProcess->setProcessChannelMode(QProcess::MergedChannels);
+
+    connect(previewProcess, &QProcess::readyReadStandardOutput, this, [this]() {
+        terminalOutput->appendPlainText(QString::fromLocal8Bit(previewProcess->readAll()));
+    });
+    connect(previewProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this](int exitCode, QProcess::ExitStatus) {
+        terminalOutput->appendPlainText(QString("== 游戏进程退出: %1 ==").arg(exitCode));
+    });
+
+    terminalOutput->appendPlainText("== 游戏进程已启动: " + exe + " ==");
+    previewProcess->start(exe, QStringList());
+}
+
+void MainWindow::stopPreviewProcess()
+{
+    if (previewProcess)
+    {
+        if (previewProcess->state() != QProcess::NotRunning)
+        {
+            previewProcess->kill();
+            previewProcess->waitForFinished(2000);
+        }
+        previewProcess->deleteLater();
+        previewProcess = nullptr;
+    }
+}
+
+void MainWindow::setupPreviewWatcher()
+{
+    if (!previewWatcher)
+    {
+        previewWatcher = new QFileSystemWatcher(this);
+        connect(previewWatcher, &QFileSystemWatcher::directoryChanged, this, &MainWindow::onGameSourceChanged);
+        connect(previewWatcher, &QFileSystemWatcher::fileChanged, this, &MainWindow::onGameSourceChanged);
+    }
+
+    QStringList old = previewWatcher->files() + previewWatcher->directories();
+    if (!old.isEmpty())
+        previewWatcher->removePaths(old);
+
+    QStringList paths;
+    for (const QString &sub : {QString("src"), QString("scenes")})
+    {
+        QDir dir(QDir(workspacePath).filePath(sub));
+        if (!dir.exists())
+            continue;
+        paths << dir.absolutePath(); // 目录级：新增/删除文件
+        for (const QString &f : dir.entryList({"*.cpp", "*.h", "*.hpp", "*.c", "*.json"}, QDir::Files))
+            paths << dir.filePath(f); // 文件级：内容修改
+    }
+    paths << QDir(workspacePath).filePath("CMakeLists.txt");
+    previewWatcher->addPaths(paths);
+}
+
+void MainWindow::onGameSourceChanged()
+{
+    if (!previewDebounceTimer)
+    {
+        previewDebounceTimer = new QTimer(this);
+        previewDebounceTimer->setSingleShot(true);
+        connect(previewDebounceTimer, &QTimer::timeout, this, &MainWindow::reloadPreviewDebounced);
+    }
+    previewDebounceTimer->start(800); // 防抖：连续保存只触发一次
+}
+
+void MainWindow::reloadPreviewDebounced()
+{
+    if (workspacePath.isEmpty() || !isYCodeGameProject(workspacePath))
+        return;
+
+    terminalOutput->appendPlainText("== 检测到源码/场景变更，重新构建并重启预览 ==");
+    startPreviewBuild();
+}

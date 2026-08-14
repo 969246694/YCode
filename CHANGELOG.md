@@ -40,6 +40,7 @@
 
 - 修复关闭窗口时多标签页场景下保存错文件的问题：`closeEvent` 现在对每个已修改的标签页直接调用 `saveEditorToFile` 保存，而非误存当前标签页；「另存为」被取消时会中止关闭，避免误丢改动。
 - 将约 2800 行的 `MainWindow.cpp` 按职责拆分为 4 个文件：`MainWindow.cpp`（核心逻辑与回调）、`MainWindowUi.cpp`（界面搭建）、`MainWindowTheme.cpp`（主题与配色）、`MainWindowGame.cpp`（游戏开发），纯重构、行为不变。
+- 新增游戏「实时预览」：`游戏开发 → 实时预览` 一键构建并运行游戏；用 `QFileSystemWatcher` 监视游戏项目 `src/`、`scenes/` 与 `CMakeLists.txt`，保存文件后防抖自动重建并重启游戏（热重载循环）。
 
 ### YCodeEngine
 

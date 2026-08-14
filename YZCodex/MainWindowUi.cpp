@@ -700,6 +700,8 @@ void MainWindow::setupMenuBar()
     gameMenu->addSeparator();
     gameMenu->addAction("🔨 构建当前游戏项目", this, &MainWindow::buildGameProject);
     gameMenu->addAction("▶️ 运行当前游戏项目", this, &MainWindow::runGameProject);
+    gameMenu->addAction("🔁 实时预览（自动重建+重启）", this, &MainWindow::runGamePreview);
+    gameMenu->addAction("⏹ 停止预览", this, &MainWindow::stopGamePreview);
     gameMenu->addSeparator();
     gameMenu->addAction("🛠 构建 YCode Engine", this, &MainWindow::buildYCodeEngine);
     gameMenu->addAction("📂 打开引擎源码目录", this, &MainWindow::openYCodeEngineFolder);
