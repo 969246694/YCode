@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  engine:
+    name: YCodeEngine (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S YCodeEngine -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+  # agent.exe 依赖 vcpkg 提供的 libcurl，Qt 客户端依赖 Qt6，两者暂未纳入 CI。
+  # 待补充：使用 vcpkg manifest 固化依赖后，可在此增加 agent 的编译与冒烟测试。

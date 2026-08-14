@@ -181,9 +181,9 @@ bool applyPhysics2D(const Json& entityObject, Entity& entity, std::string* error
         return false;
     if (!readBodyTypeField(*physics, "type", physicsBody.bodyType, error))
         return false;
-    if (!applyBoxColliderFields(*physics, physicsBody.box, error))
-        return false;
 
+    // 碰撞体字段只从 box/collider 子对象读取（与文档格式一致），
+    // 不再对整个 physics 对象重复解析。
     const Json* box = findField(*physics, "box");
     const Json* collider = findField(*physics, "collider");
     const Json* colliderObject = box ? box : collider;

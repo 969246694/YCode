@@ -27,7 +27,10 @@ bool EventBus::unsubscribe(SubscriptionId id)
 
 void EventBus::publish(const Event& event) const
 {
-    for (const auto& sub : subscriptions_)
+    // 先拷贝一份订阅快照再派发：处理函数在派发过程中订阅/退订
+    // 不会使当前迭代器失效，也不会影响本轮派发集合。
+    std::vector<Subscription> snapshot = subscriptions_;
+    for (const auto& sub : snapshot)
     {
         if (sub.eventType == event.type || sub.eventType == "*")
             sub.handler(event);

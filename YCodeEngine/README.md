@@ -29,6 +29,18 @@ Output:
 build\msvc2022_64\Release\ycode_engine_launcher.exe
 ```
 
+## Tests
+
+Engine 核心（EventBus、Scene、SceneLoader、ResourceManager、PhysicsWorld2D）带有 CTest 单元测试：
+
+```bat
+cmake -S . -B build -A x64
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+测试源码位于 `tests/engine_tests.cpp`，会随 CI（`.github/workflows/ci.yml`）在 Ubuntu 与 Windows 上自动运行。
+
 ## Architecture
 
 - `include/ycode/engine.h`: engine lifecycle

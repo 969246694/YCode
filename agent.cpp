@@ -58,6 +58,20 @@ std::string executeShellCommand(const std::string &command)
     return result;
 }
 
+// 判断字符串是否包含会破坏 cmd 命令拼接的元字符。
+// 注意：* 与 ? 是 dir/findstr 的合法通配符，放行；这里只拦截能逃逸引号或执行命令的字符。
+static bool hasShellMetacharacter(const std::string &value)
+{
+    for (char c : value)
+    {
+        if (c == '"' || c == '&' || c == '|' || c == ';' || c == '<' ||
+            c == '>' || c == '^' || c == '%' || c == '!' ||
+            c == '\n' || c == '\r')
+            return true;
+    }
+    return false;
+}
+
 std::string readFile(const std::string &filepath)
 {
     struct _stat64 st;
@@ -83,6 +97,8 @@ bool writeFile(const std::string &filepath, const std::string &content)
 
 std::string searchFiles(const std::string &pattern, const std::string &directory)
 {
+    if (hasShellMetacharacter(pattern) || hasShellMetacharacter(directory))
+        return "Tool Error: pattern 或 directory 含非法字符，已拒绝执行（避免命令注入）。";
     std::string cmd = "dir /s /b \"" + directory + "\\" + pattern + "\" 2>nul";
     std::string result = executeShellCommand(cmd);
     if (result == "(无输出)" || result.empty()) return "未找到: " + pattern;
@@ -91,6 +107,8 @@ std::string searchFiles(const std::string &pattern, const std::string &directory
 
 std::string searchContent(const std::string &text, const std::string &filePattern, const std::string &directory)
 {
+    if (hasShellMetacharacter(text) || hasShellMetacharacter(filePattern) || hasShellMetacharacter(directory))
+        return "Tool Error: text、filePattern 或 directory 含非法字符，已拒绝执行（避免命令注入）。";
     std::string cmd = "findstr /s /n /i /c:\"" + text + "\" \"" + directory + "\\" + filePattern + "\" 2>nul";
     std::string result = executeShellCommand(cmd);
     if (result == "(无输出)" || result.empty()) return "未找到包含 \"" + text + "\" 的内容";
@@ -110,6 +128,8 @@ std::string deleteFile(const std::string &path)
     if (attrs == INVALID_FILE_ATTRIBUTES) return "FAIL: 不存在 " + path;
     if (attrs & FILE_ATTRIBUTE_DIRECTORY)
     {
+        if (hasShellMetacharacter(path))
+            return "FAIL 目录删除: 路径含非法字符，已拒绝执行（避免命令注入）";
         std::string cmd = "rmdir /s /q \"" + path + "\" 2>nul";
         system(cmd.c_str());
         if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) return "OK 目录删除: " + path;
@@ -148,6 +168,11 @@ std::string getFileInfo(const std::string &path)
 
 std::string downloadFile(const std::string &url, const std::string &savePath)
 {
+    // 防止静默覆盖已存在的文件；如需覆盖请先删除或换用其它路径。
+    struct _stat64 st;
+    if (_stat64(savePath.c_str(), &st) == 0)
+        return "FAIL 下载: 目标文件已存在，已拒绝覆盖: " + savePath;
+
     CURL *curl = curl_easy_init();
     if (!curl) return "FAIL 下载: 无法初始化 CURL";
     FILE *file = fopen(savePath.c_str(), "wb");
@@ -156,7 +181,7 @@ std::string downloadFile(const std::string &url, const std::string &savePath)
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteToFileCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
     CURLcode res = curl_easy_perform(curl);
     fclose(file);
@@ -164,6 +189,87 @@ std::string downloadFile(const std::string &url, const std::string &savePath)
     if (res == CURLE_OK) return "OK 下载: " + savePath;
     remove(savePath.c_str());
     return "FAIL 下载: " + std::string(curl_easy_strerror(res));
+}
+
+// ============================================================
+// 危险命令识别 — execute_command 的安全护栏
+// ============================================================
+static bool containsIgnoreCase(const std::string &value, const std::string &needle)
+{
+    if (needle.empty()) return true;
+    if (value.size() < needle.size()) return false;
+    for (size_t i = 0; i + needle.size() <= value.size(); ++i)
+    {
+        bool match = true;
+        for (size_t j = 0; j < needle.size(); ++j)
+        {
+            if (std::tolower((unsigned char)value[i + j]) != std::tolower((unsigned char)needle[j]))
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match) return true;
+    }
+    return false;
+}
+
+static bool equalsIgnoreCase(const std::string &a, const std::string &b)
+{
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i]))
+            return false;
+    return true;
+}
+
+static bool isDangerousCommand(const std::string &command)
+{
+    // PowerShell 删除 cmdlet，出现在命令任何位置都视为危险
+    if (containsIgnoreCase(command, "remove-item"))
+        return true;
+
+    static const std::vector<std::string> dangerousTokens = {
+        "del", "erase", "rmdir", "rd", "rm", "format", "diskpart",
+        "shutdown", "taskkill", "reg", "setx", "bcdedit", "takeown",
+        "icacls", "cacls"
+    };
+    static const std::vector<std::string> wrapperTokens = {
+        "cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh",
+        "call", "start", "/c", "/k", "-c", "-command", "/command"
+    };
+
+    // 按语句分隔符拆分，逐条定位第一个真正的命令 token
+    std::string statement;
+    for (size_t i = 0; i <= command.size(); ++i)
+    {
+        char c = (i < command.size()) ? command[i] : '&';
+        bool isSep = (c == '&' || c == '|' || c == ';' || c == '\n' || c == '\r' || c == '(' || c == ')');
+        if (!isSep)
+        {
+            statement.push_back(c);
+            continue;
+        }
+
+        std::istringstream tok(statement);
+        std::string token;
+        while (tok >> token)
+        {
+            bool wrapper = false;
+            for (const std::string &w : wrapperTokens)
+            {
+                if (equalsIgnoreCase(token, w)) { wrapper = true; break; }
+            }
+            if (wrapper)
+                continue;
+
+            for (const std::string &d : dangerousTokens)
+                if (equalsIgnoreCase(token, d)) return true;
+            break;
+        }
+        statement.clear();
+    }
+    return false;
 }
 
 // ============================================================
@@ -287,6 +393,7 @@ private:
     double temperature = DEFAULT_TEMPERATURE;
     std::string projectPath;
     std::vector<std::string> changedPaths;
+    bool allowDangerousCommands = false;
 
     static std::string toLower(std::string value)
     {
@@ -461,6 +568,23 @@ private:
         return "变更已记录，但不影响当前运行程序，无需重建或热加载: " + summary;
     }
 
+    bool confirmDangerousOperation(const std::string &description)
+    {
+        if (allowDangerousCommands)
+            return true;
+
+        const char *managed = std::getenv("YCODE_MANAGED");
+        bool managedByYCode = managed && std::string(managed) == "1";
+        if (managedByYCode)
+            return false; // 托管模式下无法交互确认，由调用方提示用户 /allow-dangerous
+
+        std::cout << "\n  ⚠ 检测到危险操作: " << description << std::endl;
+        std::cout << "  是否允许执行? (y/n): " << std::flush;
+        std::string answer;
+        std::getline(std::cin, answer);
+        return answer == "y" || answer == "Y" || answer == "yes" || answer == "YES" || answer == "是";
+    }
+
     json getTools()
     {
         json tools = json::array();
@@ -482,7 +606,7 @@ private:
             }),
             json::array()));
 
-        tools.push_back(makeTool("execute_command", "执行系统命令（仅限查看类命令，如 dir、echo）",
+        tools.push_back(makeTool("execute_command", "执行系统命令。删除/格式化/注册表/环境变量/关机等危险命令会被拦截并要求用户授权（用户可发 /allow-dangerous）。",
             json::object({
                 {"command", makeProp("command", "string", "要执行的命令")}
             }),
@@ -572,12 +696,18 @@ private:
         if (toolName == "list_directory")
         {
             std::string path = args.contains("path") ? args["path"].get<std::string>() : ".";
+            if (hasShellMetacharacter(path))
+                return "Tool Error: path 含非法字符，已拒绝执行（避免命令注入）。";
             return executeShellCommand("dir \"" + path + "\"");
         }
         if (toolName == "execute_command")
         {
             std::string cmd = args["command"];
             std::cout << "\n  [执行: " << cmd << "]" << std::endl;
+            if (isDangerousCommand(cmd) && !confirmDangerousOperation("execute_command: " + cmd))
+                return "已拦截危险命令: " + cmd +
+                       "\n该命令属于删除/格式化/注册表/环境变量/关机等破坏性操作。"
+                       "若用户确实要求执行，请先告知用户将要执行的操作，并请用户在聊天中输入 /allow-dangerous 授权后再重试。";
             return executeShellCommand(cmd);
         }
         if (toolName == "search_files")
@@ -601,6 +731,9 @@ private:
         if (toolName == "delete_file")
         {
             std::string path = args["path"].get<std::string>();
+            if (!confirmDangerousOperation("delete_file: " + path))
+                return "已拦截删除操作: " + path +
+                       "\n删除文件或目录属于破坏性操作。若用户确实要求删除，请先告知用户将要删除的内容，并请用户在聊天中输入 /allow-dangerous 授权后再重试。";
             std::string result = deleteFile(path);
             if (startsWith(result, "OK"))
                 recordChangedPath(path);
@@ -669,7 +802,7 @@ private:
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
 
         CURLcode res = curl_easy_perform(curl);
@@ -700,7 +833,13 @@ private:
         }
 
         if (httpCode != 200)
-            return "HTTP Error: " + std::to_string(httpCode);
+        {
+            std::string body = responseBuffer;
+            if (body.length() > 500)
+                body = body.substr(0, 500) + "...";
+            return "HTTP Error: " + std::to_string(httpCode) +
+                   (body.empty() ? "" : " - " + body);
+        }
 
         return responseBuffer;
     }
@@ -711,6 +850,8 @@ public:
 
     void setTemperature(double t) { temperature = t; }
     void setModel(const std::string &m) { modelName = m; }
+    void setAllowDangerousCommands(bool allow) { allowDangerousCommands = allow; }
+    bool dangerousCommandsAllowed() const { return allowDangerousCommands; }
 
     std::string chat(const std::string &userMessage, std::vector<json> &conversationHistory)
     {
@@ -741,27 +882,40 @@ public:
 
                         for (const auto &toolCall : assistantMsg["tool_calls"])
                         {
-                            std::string toolName = toolCall["function"]["name"];
-                            std::string argsStr = toolCall["function"]["arguments"].get<std::string>();
+                            const json &function = toolCall["function"];
+                            std::string toolName = function.value("name", std::string("unknown_tool"));
                             std::cout << "  调用: " << toolName << std::endl;
-                            json toolArgs = json::parse(argsStr);
-                            std::string toolResult = executeTool(toolName, toolArgs);
+
+                            std::string toolResult;
+                            try
+                            {
+                                std::string argsStr = function.value("arguments", std::string("{}"));
+                                json toolArgs = json::parse(argsStr);
+                                toolResult = executeTool(toolName, toolArgs);
+                            }
+                            catch (const json::exception &e)
+                            {
+                                toolResult = "Tool Error: 工具参数解析失败 - " + std::string(e.what());
+                            }
+
                             conversationHistory.push_back({{"role", "tool"},
-                                                           {"tool_call_id", toolCall["id"]},
+                                                           {"tool_call_id", toolCall.value("id", std::string("unknown_id"))},
                                                            {"content", toolResult}});
                         }
                         continue;
                     }
                     else
                     {
-                        std::string content = assistantMsg["content"].get<std::string>();
-                        if (conversationHistory.size() > 30)
+                        std::string content = assistantMsg.contains("content") && assistantMsg["content"].is_string()
+                            ? assistantMsg["content"].get<std::string>()
+                            : std::string();
+                        if (conversationHistory.size() > 20)
                             trimHistory(conversationHistory);
                         return content;
                     }
                 }
                 else if (responseJson.contains("error"))
-                    return "API Error: " + responseJson["error"]["message"].get<std::string>();
+                    return "API Error: " + responseJson["error"].value("message", std::string("unknown error"));
                 return "Unknown response format";
             }
             catch (const json::exception &e)
@@ -779,15 +933,16 @@ public:
             ? "当前游戏工作区是: " + std::string(workspaceRoot) + "。"
             : "当前没有打开独立游戏工作区。";
 
-        return std::string("你是 YCode Agent v2.0，运行在 Yiyangzai 自制的编程工具中。") +
+        return std::string("你是 YCode Agent v2.0，运行在 Yiyangzai 自制的编程工具中。\n") +
                "你有14个工具: read_file, write_file, list_directory, execute_command, " +
-               "search_files, search_content, create_directory, delete_file, move_file, get_file_info, download_file, restart_agent, rebuild_and_restart_ycode, apply_self_changes。 " +
-               "YCode 已内置 YCodeEngine，具备 C++17 游戏引擎、Scene/Entity/Transform2D 场景层、ResourceManager/SceneLoader JSON 场景加载、原生窗口层、Key 输入枚举、Canvas2D 绘制、事件总线、插件 ABI、游戏项目模板和构建工作流。"
-               "YCODE_PROJECT_ROOT 是 YCode 自身源码根目录；YCODE_WORKSPACE_ROOT 是用户游戏项目目录。"
-               + workspaceInfo +
-               "修改代码前先读取原文件，用write_file写入完整内容。用中文回答，自信幽默。" +
-               "凡是修改了 YCode 自身文件，改完后必须调用 apply_self_changes；它会根据路径自动选择热加载、重建或重启。"
-               "只有用户明确要求立即重启 Agent 时才直接调用 restart_agent；不要在改完源码后只回复完成。";
+               "search_files, search_content, create_directory, delete_file, move_file, get_file_info, download_file, restart_agent, rebuild_and_restart_ycode, apply_self_changes。\n" +
+               "YCode 已内置 YCodeEngine，具备 C++17 游戏引擎、Scene/Entity/Transform2D 场景层、ResourceManager/SceneLoader JSON 场景加载、原生窗口层、Key 输入枚举、Canvas2D 绘制、事件总线、插件 ABI、游戏项目模板和构建工作流。\n" +
+               "YCODE_PROJECT_ROOT 是 YCode 自身源码根目录；YCODE_WORKSPACE_ROOT 是用户游戏项目目录。\n" +
+               workspaceInfo + "\n" +
+               "修改代码前先读取原文件，用write_file写入完整内容。用中文回答，自信幽默。\n" +
+               "凡是修改了 YCode 自身文件，改完后必须调用 apply_self_changes；它会根据路径自动选择热加载、重建或重启。\n" +
+               "只有用户明确要求立即重启 Agent 时才直接调用 restart_agent；不要在改完源码后只回复完成。\n" +
+               "安全护栏：execute_command 执行删除/格式化/注册表/环境变量/关机等危险命令，或 delete_file 删除文件/目录时，会被拦截并要求用户授权。被拦截时不要擅自重复尝试，应明确告知用户将要执行的操作，并请用户在聊天中发送 /allow-dangerous 授权（/deny-dangerous 可撤销授权）。";
     }
 
     void trimHistory(std::vector<json> &history)
@@ -846,9 +1001,6 @@ int main(int argc, char *argv[])
     std::cout << "========================================" << std::endl;
 
     std::string apiKey;
-    if (argc > 1)
-        apiKey = argv[1];
-    else
     {
         const char *envKey = std::getenv("DEEPSEEK_API_KEY");
         if (envKey && *envKey) apiKey = envKey;
@@ -867,13 +1019,13 @@ int main(int argc, char *argv[])
     }
 
     std::string projectDir = ".";
-    if (argc > 2) projectDir = argv[2];
+    if (argc > 1) projectDir = argv[1];
 
     DeepSeekAgent agent(apiKey, projectDir);
     std::string input;
     std::vector<json> conversationHistory;
 
-    std::cout << "\n命令: /exit /clear /save /load /restart /self-update /apply-self-changes /temp 0.5 /model name /help" << std::endl;
+    std::cout << "\n命令: /exit /clear /save /load /restart /self-update /apply-self-changes /temp 0.5 /model name /allow-dangerous /deny-dangerous /help" << std::endl;
     std::cout << "----------------------------------------" << std::endl;
 
     while (true)
@@ -932,18 +1084,44 @@ int main(int argc, char *argv[])
 
         if (input.substr(0, 6) == "/temp ")
         {
-            try { double t = std::stod(input.substr(6)); if (t >= 0.0 && t <= 1.5) agent.setTemperature(t); }
-            catch (...) {}
+            try
+            {
+                double t = std::stod(input.substr(6));
+                if (t >= 0.0 && t <= 1.5) { agent.setTemperature(t); std::cout << "温度已设为 " << t << std::endl; }
+                else { std::cout << "温度需在 0.0-1.5 之间" << std::endl; }
+            }
+            catch (...) { std::cout << "无效的温度值" << std::endl; }
             continue;
         }
 
-        if (input.substr(0, 7) == "/model ") { agent.setModel(input.substr(7)); continue; }
-        if (input == "/help") { std::cout << "YCode Agent v2.0 - 14个工具的全能编程助手 | apply_self_changes 会按路径热加载、重建或重启 | /restart 重启 Agent | /self-update 重建并重启 YCode" << std::endl; continue; }
+        if (input.substr(0, 7) == "/model ")
+        {
+            std::string m = input.substr(7);
+            agent.setModel(m);
+            std::cout << "模型已设为 " << m << std::endl;
+            continue;
+        }
+
+        if (input == "/allow-dangerous")
+        {
+            agent.setAllowDangerousCommands(true);
+            std::cout << "已授权执行危险命令（用 /deny-dangerous 撤销）。请谨慎使用。" << std::endl;
+            continue;
+        }
+        if (input == "/deny-dangerous")
+        {
+            agent.setAllowDangerousCommands(false);
+            std::cout << "已关闭危险命令授权。" << std::endl;
+            continue;
+        }
+
+        if (input == "/help") { std::cout << "YCode Agent v2.0 - 14个工具的全能编程助手 | apply_self_changes 按路径热加载/重建/重启 | /restart 重启 Agent | /self-update 重建并重启 YCode | /allow-dangerous 授权危险命令 | /deny-dangerous 撤销授权" << std::endl; continue; }
         if (input.empty()) continue;
 
         std::cout << "Agent: " << std::flush;
         std::string response = agent.chat(input, conversationHistory);
         std::cout << response << std::endl;
+        agent.saveSession(conversationHistory); // 每次响应后自动保存，避免崩溃丢失历史
     }
 
     return 0;

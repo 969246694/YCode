@@ -6,6 +6,11 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 源文件统一按 UTF-8 解释，避免中文注释在 GBK 代码页下被误读。
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 file(GLOB BOX2D_VENDOR_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/box2d/src/*.c"
 )
@@ -72,3 +77,14 @@ add_executable(ycode_engine_launcher
 )
 
 target_link_libraries(ycode_engine_launcher PRIVATE ycode_engine)
+
+# ---- Tests -------------------------------------------------------------
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(ycode_engine_tests
+        tests/engine_tests.cpp
+    )
+    target_link_libraries(ycode_engine_tests PRIVATE ycode_engine)
+    target_compile_features(ycode_engine_tests PRIVATE cxx_std_17)
+    add_test(NAME ycode_engine_tests COMMAND ycode_engine_tests)
+endif()

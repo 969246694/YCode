@@ -1392,35 +1392,46 @@ void MainWindow::openFile()
     updateStatusBar();
 }
 
-void MainWindow::saveFile()
+bool MainWindow::saveEditorToFile(CodeEditor *editor)
 {
-    int currentIndex = editorTabs->currentIndex();
-    if (currentIndex < 0)
-        return;
-
-    CodeEditor *editor = qobject_cast<CodeEditor *>(editorTabs->widget(currentIndex));
     if (!editor)
-        return;
+        return false;
 
     QString filePath = editor->filePath();
     if (filePath.isEmpty())
     {
-        saveAsFile();
-        return;
+        QString chosen = QFileDialog::getSaveFileName(this, "保存文件", activeWorkspacePath(),
+                                                      "C++文件 (*.cpp);;头文件 (*.h);;Python (*.py);;文本文件 (*.txt)");
+        if (chosen.isEmpty())
+            return false;
+        filePath = chosen;
+        editor->setFilePath(filePath);
+        int idx = editorTabs->indexOf(editor);
+        if (idx >= 0)
+            editorTabs->setTabText(idx, QFileInfo(filePath).fileName());
     }
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         QMessageBox::warning(this, "错误", "无法保存文件: " + filePath);
-        return;
+        return false;
     }
 
     file.write(editor->toPlainText().toUtf8());
     file.close();
     editor->setModified(false);
+    return true;
+}
 
-    statusMessage->setText("已保存: " + QFileInfo(filePath).fileName());
+void MainWindow::saveFile()
+{
+    CodeEditor *editor = qobject_cast<CodeEditor *>(editorTabs->currentWidget());
+    if (!editor)
+        return;
+
+    if (saveEditorToFile(editor))
+        statusMessage->setText("已保存: " + QFileInfo(editor->filePath()).fileName());
 }
 
 void MainWindow::saveAsFile()
@@ -2769,7 +2780,14 @@ void MainWindow::closeEvent(QCloseEvent *event)
                     QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
 
                 if (result == QMessageBox::Save)
-                    saveFile();
+                {
+                    if (!saveEditorToFile(editor))
+                    {
+                        // 保存被取消或失败：中止关闭
+                        event->ignore();
+                        return;
+                    }
+                }
                 else if (result == QMessageBox::Cancel)
                 {
                     event->ignore();

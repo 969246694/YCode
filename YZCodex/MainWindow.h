@@ -111,6 +111,7 @@ private:
     void loadPanelTheme(QSettings &settings);
     void savePanelTheme(QSettings &settings) const;
     QString panelThemePresetName(const QString &presetKey) const;
+    bool saveEditorToFile(CodeEditor *editor);
     bool writeTextFile(const QString &filePath, const QString &content);
     bool isYCodeGameProject(const QString &path) const;
     void runTerminalProcess(const QString &title, const QString &program, const QStringList &arguments, const QString &workingDirectory);

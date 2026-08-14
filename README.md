@@ -55,6 +55,19 @@ build.bat
 set YCODE_PROJECT_ROOT=D:\path\to\YCode
 ```
 
+## 测试
+
+YCodeEngine 内置了针对 EventBus、Scene、SceneLoader、ResourceManager、PhysicsWorld2D 的单元测试，通过 CTest 运行：
+
+```bat
+cd YCodeEngine
+cmake -S . -B build -A x64
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+GitHub Actions 会在每次 push / pull request 时自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行这些测试（见 `.github/workflows/ci.yml`）。
+
 ## 配置
 
 运行前需要设置 DeepSeek API Key：
@@ -70,6 +83,22 @@ set DEEPSEEK_API_KEY=your-api-key-here
 ```
 
 客户端设置窗口中输入的 API Key 只在当前运行会话中使用，不会写入 Qt 设置文件；重启后建议从 `DEEPSEEK_API_KEY` 环境变量读取。不要把真实 API Key、会话文件或本地构建产物提交到仓库。
+
+## 安全护栏
+
+Agent 的 `execute_command` 与 `delete_file` 工具内置了破坏性操作拦截：
+
+- `execute_command` 执行 `del` / `erase` / `rmdir` / `rd` / `rm` / `format` / `diskpart` / `shutdown` / `taskkill` / `reg` / `setx` / `bcdedit` / `takeown` / `icacls` / `cacls` 以及 PowerShell 的 `Remove-Item` 等命令前会被拦截。
+- `delete_file` 删除文件或目录前需要确认。
+
+授权方式：
+
+- 独立模式（终端直接运行 `agent.exe`）：拦截时交互输入 `y` 确认。
+- 托管模式（通过 YCode 客户端）：在聊天中发送 `/allow-dangerous` 授权，`/deny-dangerous` 撤销授权。
+
+`search_files` / `search_content` / `list_directory` 等工具会拒绝含 shell 元字符的参数，避免命令注入。
+
+更多安全细节见 [SECURITY.md](SECURITY.md)。
 
 ## 游戏开发
 

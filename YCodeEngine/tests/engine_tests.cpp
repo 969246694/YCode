@@ -1,0 +1,382 @@
+#include "ycode/engine.h"
+#include "ycode/event_bus.h"
+#include "ycode/physics2d.h"
+#include "ycode/resource_manager.h"
+#include "ycode/scene.h"
+#include "ycode/scene_loader.h"
+
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
+#include <fstream>
+#include <string>
+
+namespace {
+
+int g_checks = 0;
+int g_failures = 0;
+
+} // namespace
+
+#define CHECK(cond)                                                        \
+    do {                                                                   \
+        ++g_checks;                                                        \
+        if (!(cond)) {                                                     \
+            ++g_failures;                                                  \
+            std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #cond);    \
+        }                                                                  \
+    } while (0)
+
+#define CHECK_EQ(a, b)                                                     \
+    do {                                                                   \
+        ++g_checks;                                                        \
+        auto _a = (a);                                                     \
+        auto _b = (b);                                                     \
+        if (!(_a == _b)) {                                                 \
+            ++g_failures;                                                  \
+            std::printf("FAIL %s:%d  %s == %s\n", __FILE__, __LINE__, #a, #b); \
+        }                                                                  \
+    } while (0)
+
+#define CHECK_NEAR(a, b, eps)                                              \
+    do {                                                                   \
+        ++g_checks;                                                        \
+        float _a = static_cast<float>(a);                                  \
+        float _b = static_cast<float>(b);                                  \
+        float _e = static_cast<float>(eps);                                \
+        if (std::fabs(_a - _b) > _e) {                                     \
+            ++g_failures;                                                  \
+            std::printf("FAIL %s:%d  %s ~= %s\n", __FILE__, __LINE__, #a, #b); \
+        }                                                                  \
+    } while (0)
+
+// ------------------------------------------------------------
+// EventBus
+// ------------------------------------------------------------
+static void testEventBus()
+{
+    ycode::EventBus bus;
+    int specific = 0;
+    int wildcard = 0;
+
+    bus.subscribe("ping", [&](const ycode::Event&) { ++specific; });
+    bus.subscribe("*", [&](const ycode::Event&) { ++wildcard; });
+
+    bus.publish({"ping", {}});
+    CHECK_EQ(specific, 1);
+    CHECK_EQ(wildcard, 1);
+
+    bus.publish({"other", {}});
+    CHECK_EQ(specific, 1);   // 未匹配具体类型
+    CHECK_EQ(wildcard, 2);   // 通配符仍收到
+
+    ycode::EventBus::SubscriptionId id =
+        bus.subscribe("ping", [&](const ycode::Event&) { specific += 100; });
+    bus.publish({"ping", {}});
+    CHECK_EQ(specific, 102); // 1 + 1 + 100
+
+    CHECK(bus.unsubscribe(id));
+    CHECK(!bus.unsubscribe(id)); // 二次退订返回 false
+    bus.publish({"ping", {}});
+    CHECK_EQ(specific, 103); // 退订后不再累加 100
+
+    bus.clear();
+    bus.publish({"ping", {}});
+    CHECK_EQ(specific, 103);
+    CHECK_EQ(wildcard, 4);
+}
+
+static void testEventBusReentrancy()
+{
+    ycode::EventBus bus;
+    int a = 0;
+    int b = 0;
+
+    // 处理函数在派发过程中退订自身：快照机制下不应导致迭代器失效。
+    ycode::EventBus::SubscriptionId idA =
+        bus.subscribe("t", [&](const ycode::Event&) {
+            ++a;
+            bus.unsubscribe(idA);
+        });
+    bus.subscribe("t", [&](const ycode::Event&) { ++b; });
+
+    bus.publish({"t", {}});
+    CHECK_EQ(a, 1);
+    CHECK_EQ(b, 1);
+
+    bus.publish({"t", {}});
+    CHECK_EQ(a, 1); // 已在上一轮退订
+    CHECK_EQ(b, 2);
+}
+
+// ------------------------------------------------------------
+// Scene
+// ------------------------------------------------------------
+static void testScene()
+{
+    ycode::Scene scene("Test");
+    CHECK_EQ(scene.name(), std::string("Test"));
+    CHECK(scene.empty());
+
+    // 注意：createEntity 返回 vector 元素引用，后续 push_back 可能使其失效，
+    // 所以这里只持有 id 值，再用 findEntity 重新定位。
+    ycode::EntityId aId = scene.createEntity("A").id;
+    ycode::EntityId bId = scene.createEntity().id;
+    CHECK_EQ(scene.entityCount(), std::size_t(2));
+    CHECK(aId != bId);
+
+    ycode::Entity* b = scene.findEntity(bId);
+    CHECK(b != nullptr);
+    if (b)
+        CHECK_EQ(b->name, std::string("Entity 2")); // 默认命名
+
+    ycode::Entity* a = scene.findEntityByName("A");
+    CHECK(a != nullptr);
+    if (a)
+        CHECK_EQ(a->id, aId);
+
+    CHECK(scene.findEntity(aId) != nullptr);
+    CHECK_EQ(scene.findEntity(999), nullptr);
+    CHECK_EQ(scene.findEntityByName("nope"), nullptr);
+
+    CHECK(scene.destroyEntity(aId));
+    CHECK_EQ(scene.entityCount(), std::size_t(1));
+    CHECK_EQ(scene.findEntity(aId), nullptr);
+    CHECK(!scene.destroyEntity(aId)); // 已删除
+
+    int calls = 0;
+    scene.setUpdateHandler([&](ycode::Scene&, float) { ++calls; });
+    scene.update(0.016f);
+    CHECK_EQ(calls, 1);
+
+    scene.clear();
+    CHECK(scene.empty());
+    CHECK_EQ(scene.entityCount(), std::size_t(0));
+
+    // clear 后 id 从 1 重新分配
+    ycode::EntityId cId = scene.createEntity().id;
+    CHECK_EQ(cId, ycode::EntityId(1));
+}
+
+// ------------------------------------------------------------
+// SceneLoader
+// ------------------------------------------------------------
+static void testSceneLoader()
+{
+    ycode::Scene scene;
+    std::string err;
+    const char* json = R"({
+      "name": "Loaded",
+      "entities": [
+        {
+          "name": "Player",
+          "transform": { "position": [10, 20], "rotationDegrees": 45, "scale": [2, 3] },
+          "physics2D": {
+            "bodyType": "dynamic",
+            "box": { "halfSizeMeters": [0.4, 0.6], "fixedRotation": true }
+          },
+          "properties": { "kind": "hero", "hp": 100, "alive": true, "nick": null, "speed": 1.5 }
+        },
+        {
+          "name": "Ground",
+          "physics2D": { "bodyType": "static", "box": { "density": 0.0, "friction": 0.6 } }
+        }
+      ]
+    })";
+
+    CHECK(ycode::SceneLoader::loadFromText(json, scene, &err));
+    CHECK_EQ(scene.name(), std::string("Loaded"));
+    CHECK_EQ(scene.entityCount(), std::size_t(2));
+
+    ycode::Entity* player = scene.findEntityByName("Player");
+    if (player)
+    {
+        CHECK_NEAR(player->transform.position.x, 10.0f, 1e-5f);
+        CHECK_NEAR(player->transform.position.y, 20.0f, 1e-5f);
+        CHECK_NEAR(player->transform.rotationDegrees, 45.0f, 1e-5f);
+        CHECK_NEAR(player->transform.scale.x, 2.0f, 1e-5f);
+        CHECK_NEAR(player->transform.scale.y, 3.0f, 1e-5f);
+
+        CHECK(player->physics2D.enabled);
+        CHECK(player->physics2D.bodyType == ycode::BodyType2D::Dynamic);
+        CHECK_NEAR(player->physics2D.box.halfSizeMeters.x, 0.4f, 1e-5f);
+        CHECK_NEAR(player->physics2D.box.halfSizeMeters.y, 0.6f, 1e-5f);
+        CHECK(player->physics2D.box.fixedRotation);
+
+        CHECK_EQ(player->properties.at("kind"), std::string("hero"));
+        CHECK_EQ(player->properties.at("hp"), std::string("100"));
+        CHECK_EQ(player->properties.at("alive"), std::string("true"));
+        CHECK_EQ(player->properties.at("nick"), std::string(""));
+        CHECK_EQ(player->properties.at("speed"), std::string("1.5"));
+    }
+
+    ycode::Entity* ground = scene.findEntityByName("Ground");
+    if (ground)
+    {
+        CHECK(ground->physics2D.bodyType == ycode::BodyType2D::Static);
+        CHECK_NEAR(ground->physics2D.box.density, 0.0f, 1e-5f);
+        CHECK_NEAR(ground->physics2D.box.friction, 0.6f, 1e-5f);
+    }
+
+    // 错误路径
+    ycode::Scene s1;
+    CHECK(!ycode::SceneLoader::loadFromText("not json", s1, &err));
+
+    ycode::Scene s2;
+    CHECK(!ycode::SceneLoader::loadFromText("{}", s2, &err)); // 缺少 entities 数组
+
+    ycode::Scene s3;
+    CHECK(!ycode::SceneLoader::loadFromText(
+        "{\"entities\":[{\"physics2D\":{\"bodyType\":\"nope\"}}]}", s3, &err));
+
+    ycode::Scene s4;
+    CHECK(!ycode::SceneLoader::loadFromText(
+        "{\"entities\":[{\"transform\":{\"position\":[1]}}]}", s4, &err)); // vec2 长度错误
+}
+
+// ------------------------------------------------------------
+// ResourceManager
+// ------------------------------------------------------------
+static void testResourceManager()
+{
+    ycode::ResourceManager rm(".");
+
+    std::string rel = rm.resolvePath("scenes/main.scene.json");
+    CHECK(!rel.empty());
+    CHECK(rel.find("scenes") != std::string::npos);
+
+    // 传入已解析的相对路径应稳定（幂等）
+    CHECK_EQ(rm.resolvePath(rel), rel);
+
+    CHECK(!rm.exists("__definitely_missing__.json"));
+
+    std::string out;
+    std::string err;
+    CHECK(!rm.readText("__definitely_missing__.json", out, &err));
+    CHECK(!err.empty());
+}
+
+// ------------------------------------------------------------
+// PhysicsWorld2D
+// ------------------------------------------------------------
+static void testPhysics()
+{
+    ycode::Scene scene;
+    ycode::Entity& e = scene.createEntity("Ball");
+    e.transform.position = ycode::Vec2{0.0f, 0.0f};
+
+    ycode::PhysicsWorld2D physics;
+    CHECK(physics.isEnabled());
+    CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    ycode::BoxCollider2D box;
+    box.halfSizeMeters = ycode::Vec2{0.5f, 0.5f};
+    std::string err;
+    CHECK(physics.attachBox(scene, e.id, ycode::BodyType2D::Dynamic, box, &err));
+    CHECK(physics.hasBody(e.id));
+    CHECK_EQ(physics.bodyCount(), std::size_t(1));
+
+    // 速度读写往返
+    physics.setLinearVelocity(e.id, ycode::Vec2{1.0f, 2.0f});
+    ycode::Vec2 v = physics.linearVelocity(e.id);
+    CHECK_NEAR(v.x, 1.0f, 1e-4f);
+    CHECK_NEAR(v.y, 2.0f, 1e-4f);
+
+    // 受重力下落：动态刚体的 y 位置应随时间减小
+    float y0 = e.transform.position.y;
+    for (int i = 0; i < 60; ++i)
+        physics.step(scene, 1.0f / 60.0f);
+    CHECK(e.transform.position.y < y0);
+
+    // 同一实体重新挂接会替换旧刚体
+    CHECK(physics.attachBox(scene, e.id, ycode::BodyType2D::Static, box, &err));
+    CHECK_EQ(physics.bodyCount(), std::size_t(1));
+
+    CHECK(physics.detach(e.id));
+    CHECK(!physics.hasBody(e.id));
+    CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    // 非法参数
+    ycode::BoxCollider2D bad;
+    bad.halfSizeMeters = ycode::Vec2{0.0f, 0.5f};
+    CHECK(!physics.attachBox(scene, e.id, ycode::BodyType2D::Dynamic, bad, &err));
+    CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    physics.clear();
+    CHECK_EQ(physics.bodyCount(), std::size_t(0));
+}
+
+// ------------------------------------------------------------
+// 文件读写路径（ResourceManager::readText / SceneLoader::loadFromFile）
+// ------------------------------------------------------------
+static void testFileIo()
+{
+    const char* textPath = "ycode_engine_test_tmp.txt";
+    {
+        std::ofstream f(textPath, std::ios::binary);
+        f << "hello ycode";
+    }
+
+    ycode::ResourceManager rm(".");
+    CHECK(rm.exists(textPath));
+    std::string out;
+    std::string err;
+    CHECK(rm.readText(textPath, out, &err));
+    CHECK_EQ(out, std::string("hello ycode"));
+    std::remove(textPath);
+
+    const char* scenePath = "ycode_engine_test_scene.json";
+    {
+        std::ofstream f(scenePath, std::ios::binary);
+        f << R"({"name":"FileScene","entities":[{"name":"E"}]})";
+    }
+    ycode::Scene scene;
+    CHECK(ycode::SceneLoader::loadFromFile(scenePath, scene, &err));
+    CHECK_EQ(scene.name(), std::string("FileScene"));
+    CHECK_EQ(scene.entityCount(), std::size_t(1));
+    std::remove(scenePath);
+
+    // 文件不存在
+    ycode::Scene missing;
+    CHECK(!ycode::SceneLoader::loadFromFile("__no_such_scene__.json", missing, &err));
+}
+
+// ------------------------------------------------------------
+// Engine 生命周期（无窗口，仅验证 init/tick/shutdown）
+// ------------------------------------------------------------
+static void testEngineLifecycle()
+{
+    ycode::EngineConfig config;
+    config.createWindow = false;
+    config.loadStartupScene = false;
+
+    ycode::Engine engine(config);
+    std::string err;
+    CHECK(engine.initialize(&err));
+    CHECK(engine.isRunning());
+
+    for (int i = 0; i < 5; ++i)
+        engine.tick();
+
+    engine.shutdown();
+    CHECK(!engine.isRunning());
+}
+
+int main()
+{
+    testEventBus();
+    testEventBusReentrancy();
+    testScene();
+    testSceneLoader();
+    testResourceManager();
+    testPhysics();
+    testEngineLifecycle();
+    testFileIo();
+
+    std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
+    if (g_failures > 0)
+        std::printf("SOME TESTS FAILED\n");
+    else
+        std::printf("ALL TESTS PASSED\n");
+    return g_failures == 0 ? 0 : 1;
+}
