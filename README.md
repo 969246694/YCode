@@ -66,6 +66,14 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+Agent 的安全与解析逻辑测试（危险命令识别 / 注入防护 / SSE 流式解析，需 Windows + vcpkg libcurl）：
+
+```bat
+set VCPKG_INSTALLED=C:\vcpkg\installed\x64-windows
+cl /EHsc /utf-8 tests\agent_logic_tests.cpp /I YCodeEngine\third_party /I %VCPKG_INSTALLED%\include /link /LIBPATH:%VCPKG_INSTALLED%\lib libcurl.lib shell32.lib /OUT:agent_tests.exe
+agent_tests.exe
+```
+
 GitHub Actions 会在每次 push / pull request 时自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行这些测试；同时会在 Windows 上构建 `agent.exe` 并运行 agent 逻辑测试（见 `.github/workflows/ci.yml`）。
 
 ## 配置
