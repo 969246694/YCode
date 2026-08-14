@@ -40,6 +40,7 @@
 - `EventBus::publish` 派发前拷贝订阅快照，处理函数在派发过程中订阅/退订不再导致迭代器失效。
 - 清理 `SceneLoader` 对 `physics2D` 对象的冗余碰撞体解析，仅从 `box`/`collider` 子对象读取。
 - 引擎统一添加 `/utf-8` 编译选项（MSVC），避免中文注释在 GBK 代码页下被误读。
+- 新增圆形碰撞体 `CircleCollider2D`：`SceneLoader` 支持 `"circle": { "radiusMeters": ... }`，`PhysicsWorld2D::attachCircle` 挂接 Box2D 圆形刚体。
 
 ### 测试与 CI
 

@@ -82,3 +82,16 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 `Engine::loadScene()` automatically clears and rebuilds `PhysicsWorld2D` bodies from these declarations.
+
+Circle colliders are supported via the `circle` field (mutually exclusive with `box`; if both present, `circle` wins):
+
+```json
+{
+  "name": "Coin",
+  "transform": { "position": [5.0, 10.0] },
+  "physics2D": {
+    "bodyType": "kinematic",
+    "circle": { "radiusMeters": 0.3 }
+  }
+}
+```

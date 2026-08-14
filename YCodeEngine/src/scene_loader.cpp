@@ -158,6 +158,15 @@ bool applyBoxColliderFields(const Json& object, BoxCollider2D& box, std::string*
            readBoolField(object, "fixedRotation", box.fixedRotation, error);
 }
 
+bool applyCircleColliderFields(const Json& object, CircleCollider2D& circle, std::string* error)
+{
+    return readNumberField(object, "radiusMeters", circle.radiusMeters, error) &&
+           readNumberField(object, "density", circle.density, error) &&
+           readNumberField(object, "friction", circle.friction, error) &&
+           readNumberField(object, "restitution", circle.restitution, error) &&
+           readBoolField(object, "fixedRotation", circle.fixedRotation, error);
+}
+
 bool applyPhysics2D(const Json& entityObject, Entity& entity, std::string* error)
 {
     const Json* physics = findField(entityObject, "physics2D");
@@ -198,6 +207,22 @@ bool applyPhysics2D(const Json& entityObject, Entity& entity, std::string* error
 
         if (!applyBoxColliderFields(*colliderObject, physicsBody.box, error))
             return false;
+    }
+
+    // 圆形碰撞体（与 box 互斥，若同时存在以 circle 为准）
+    const Json* circle = findField(*physics, "circle");
+    if (circle)
+    {
+        if (!circle->is_object())
+        {
+            if (error)
+                *error = "Expected 'circle' to be an object";
+            return false;
+        }
+
+        if (!applyCircleColliderFields(*circle, physicsBody.circle, error))
+            return false;
+        physicsBody.useCircle = true;
     }
 
     entity.physics2D = physicsBody;

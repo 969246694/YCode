@@ -227,6 +227,63 @@ bool PhysicsWorld2D::attachBox(Scene& scene,
     return true;
 }
 
+bool PhysicsWorld2D::attachCircle(Scene& scene,
+                                  EntityId entityId,
+                                  BodyType2D bodyType,
+                                  CircleCollider2D collider,
+                                  std::string* error)
+{
+    if (entityId == kInvalidEntityId)
+    {
+        setError(error, "entityId is invalid");
+        return false;
+    }
+
+    Entity* entity = scene.findEntity(entityId);
+    if (!entity)
+    {
+        setError(error, "entity was not found in the scene");
+        return false;
+    }
+
+    if (collider.radiusMeters <= 0.0f)
+    {
+        setError(error, "collider radiusMeters must be greater than zero");
+        return false;
+    }
+
+    if (impl_->config.pixelsPerMeter <= 0.0f)
+    {
+        setError(error, "pixelsPerMeter must be greater than zero");
+        return false;
+    }
+
+    impl_->createWorld();
+    detach(entityId);
+
+    b2BodyDef bodyDef = b2DefaultBodyDef();
+    bodyDef.type = toB2(bodyType);
+    bodyDef.position = impl_->sceneToPhysics(entity->transform.position);
+    bodyDef.rotation = b2MakeRot(degreesToRadians(entity->transform.rotationDegrees));
+    bodyDef.fixedRotation = collider.fixedRotation;
+    bodyDef.name = entity->name.c_str();
+
+    b2BodyId bodyId = b2CreateBody(impl_->worldId, &bodyDef);
+
+    b2ShapeDef shapeDef = b2DefaultShapeDef();
+    shapeDef.density = collider.density;
+    shapeDef.material.friction = collider.friction;
+    shapeDef.material.restitution = collider.restitution;
+
+    b2Circle circle;
+    circle.center = b2Vec2{0.0f, 0.0f};
+    circle.radius = collider.radiusMeters;
+    b2CreateCircleShape(bodyId, &shapeDef, &circle);
+
+    impl_->bodies.push_back(Impl::BodyBinding{entityId, bodyType, bodyId});
+    return true;
+}
+
 bool PhysicsWorld2D::attachSceneBodies(Scene& scene, std::string* error)
 {
     for (Entity& entity : scene.entities())
@@ -235,7 +292,10 @@ bool PhysicsWorld2D::attachSceneBodies(Scene& scene, std::string* error)
             continue;
 
         std::string attachError;
-        if (!attachBox(scene, entity.id, entity.physics2D.bodyType, entity.physics2D.box, &attachError))
+        bool ok = entity.physics2D.useCircle
+            ? attachCircle(scene, entity.id, entity.physics2D.bodyType, entity.physics2D.circle, &attachError)
+            : attachBox(scene, entity.id, entity.physics2D.bodyType, entity.physics2D.box, &attachError);
+        if (!ok)
         {
             if (error)
                 *error = "Failed to attach physics2D body for '" + entity.name + "': " + attachError;

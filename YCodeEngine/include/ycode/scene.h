@@ -38,10 +38,20 @@ struct BoxCollider2D {
     bool fixedRotation = false;
 };
 
+struct CircleCollider2D {
+    float radiusMeters = 0.5f;
+    float density = 1.0f;
+    float friction = 0.3f;
+    float restitution = 0.0f;
+    bool fixedRotation = false;
+};
+
 struct PhysicsBody2D {
     bool enabled = false;
     BodyType2D bodyType = BodyType2D::Dynamic;
     BoxCollider2D box;
+    CircleCollider2D circle;
+    bool useCircle = false; // true 时挂圆形碰撞体，否则挂盒形
 };
 
 struct Entity {

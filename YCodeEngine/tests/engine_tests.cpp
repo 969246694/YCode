@@ -180,13 +180,21 @@ static void testSceneLoader()
         {
           "name": "Ground",
           "physics2D": { "bodyType": "static", "box": { "density": 0.0, "friction": 0.6 } }
+        },
+        {
+          "name": "Coin",
+          "transform": { "position": [5, 10] },
+          "physics2D": {
+            "bodyType": "kinematic",
+            "circle": { "radiusMeters": 0.3, "friction": 0.1 }
+          }
         }
       ]
     })";
 
     CHECK(ycode::SceneLoader::loadFromText(json, scene, &err));
     CHECK_EQ(scene.name(), std::string("Loaded"));
-    CHECK_EQ(scene.entityCount(), std::size_t(2));
+    CHECK_EQ(scene.entityCount(), std::size_t(3));
 
     ycode::Entity* player = scene.findEntityByName("Player");
     if (player)
@@ -216,6 +224,15 @@ static void testSceneLoader()
         CHECK(ground->physics2D.bodyType == ycode::BodyType2D::Static);
         CHECK_NEAR(ground->physics2D.box.density, 0.0f, 1e-5f);
         CHECK_NEAR(ground->physics2D.box.friction, 0.6f, 1e-5f);
+    }
+
+    ycode::Entity* coin = scene.findEntityByName("Coin");
+    if (coin)
+    {
+        CHECK(coin->physics2D.useCircle);
+        CHECK(coin->physics2D.bodyType == ycode::BodyType2D::Kinematic);
+        CHECK_NEAR(coin->physics2D.circle.radiusMeters, 0.3f, 1e-5f);
+        CHECK_NEAR(coin->physics2D.circle.friction, 0.1f, 1e-5f);
     }
 
     // 错误路径
@@ -301,6 +318,27 @@ static void testPhysics()
     bad.halfSizeMeters = ycode::Vec2{0.0f, 0.5f};
     CHECK(!physics.attachBox(scene, e.id, ycode::BodyType2D::Dynamic, bad, &err));
     CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    physics.clear();
+    CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    // 圆形碰撞体
+    ycode::Entity& ball = scene.createEntity("CircleBall");
+    ball.transform.position = ycode::Vec2{100.0f, 0.0f};
+    ycode::CircleCollider2D circle;
+    circle.radiusMeters = 0.25f;
+    CHECK(physics.attachCircle(scene, ball.id, ycode::BodyType2D::Dynamic, circle, &err));
+    CHECK(physics.hasBody(ball.id));
+    CHECK_EQ(physics.bodyCount(), std::size_t(1));
+
+    CHECK(physics.detach(ball.id));
+    CHECK(!physics.hasBody(ball.id));
+    CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    // 无效半径
+    ycode::CircleCollider2D badCircle;
+    badCircle.radiusMeters = 0.0f;
+    CHECK(!physics.attachCircle(scene, ball.id, ycode::BodyType2D::Dynamic, badCircle, &err));
 
     physics.clear();
     CHECK_EQ(physics.bodyCount(), std::size_t(0));
