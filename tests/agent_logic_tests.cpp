@@ -148,6 +148,17 @@ static void testExtractSearch()
 }
 
 // ------------------------------------------------------------
+static void testCommandTimeout()
+{
+    std::string ok = executeShellCommand("echo hello");
+    CHECK(ok.find("hello") != std::string::npos);
+
+    // 挂死命令应在短超时后被终止
+    std::string hung = executeShellCommand("ping -n 999 127.0.0.1", 1500);
+    CHECK(hung.find("超时") != std::string::npos);
+}
+
+// ------------------------------------------------------------
 int main()
 {
     testDangerousCommand();
@@ -156,6 +167,7 @@ int main()
     testUrlEncode();
     testStripHtmlTags();
     testExtractSearch();
+    testCommandTimeout();
 
     std::printf("\n%d checks, %d failures\n", g_ok + g_fail, g_fail);
     if (g_fail == 0)

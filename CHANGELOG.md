@@ -48,6 +48,8 @@
 - 支持通过 `YCODE_API_URL` / `YCODE_MODEL` 环境变量覆盖 API 端点与模型名。
 - 修复流式回调崩溃（`0xc0000409`）：`std::string` 的 `append`/`substr` 可能在内存压力下抛 `bad_alloc` 并从 curl 的 C 回调逃逸触发 `std::terminate`；现整个回调体均包在 `try/catch` 内，任何异常都不会逃逸。
 - 新增崩溃诊断：`set_terminate` + 向量化异常处理，把异常类型与调用栈写入 `agent_crash.log`；`build.bat` 增加 `/Zi`+`/DEBUG` 生成 PDB 以便解析函数名。
+- `execute_command` 改用 `CreateProcess` + 临时文件输出 + Job Object：命令超过 10 分钟会被终止整个进程树，不再可能挂死阻塞 Agent；子进程 stdin 指向 NUL，防止交互命令读走 Agent 的输入。
+- 新增 `fetch_url`（抓取网页文本）与 `think`（显式思考）工具；启动时自动恢复上次会话。
 
 ### YZCodex（Qt 客户端）
 

@@ -46,16 +46,95 @@ size_t WriteToFileCallback(void *ptr, size_t size, size_t nmemb, FILE *stream)
 // ============================================================
 // 工具函数
 // ============================================================
-std::string executeShellCommand(const std::string &command)
+// 执行系统命令并等待其结束；超过 timeoutMs 会终止进程，避免命令挂死阻塞 Agent。
+// 输出重定向到临时文件，避免管道缓冲死锁；子进程 stdin 指向 NUL，防止读走 Agent 的输入。
+std::string readFile(const std::string &filepath); // 前置声明
+
+std::string executeShellCommand(const std::string &command, DWORD timeoutMs = 600000)
 {
-    std::string result;
-    FILE *pipe = _popen(command.c_str(), "r");
-    if (!pipe) return "Tool Error: 无法打开命令管道。";
-    char buffer[1024];
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) result += buffer;
-    _pclose(pipe);
-    if (result.empty()) return "(无输出)";
-    if (result.length() > 8000) result = result.substr(0, 8000) + "\n... (截断)";
+    if (command.empty())
+        return "(无输出)";
+
+    char tmpDir[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmpDir);
+    char outPath[MAX_PATH];
+    if (GetTempFileNameA(tmpDir, "ycd", 0, outPath) == 0)
+        return "Tool Error: 无法创建临时输出文件";
+
+    SECURITY_ATTRIBUTES sa;
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    sa.lpSecurityDescriptor = NULL;
+
+    HANDLE hOut = CreateFileA(outPath, GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE hIn = CreateFileA("NUL", GENERIC_READ, FILE_SHARE_READ, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hOut == INVALID_HANDLE_VALUE || hIn == INVALID_HANDLE_VALUE)
+    {
+        if (hOut != INVALID_HANDLE_VALUE) CloseHandle(hOut);
+        if (hIn != INVALID_HANDLE_VALUE) CloseHandle(hIn);
+        DeleteFileA(outPath);
+        return "Tool Error: 无法创建命令输出文件";
+    }
+
+    STARTUPINFOA si;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdOutput = hOut;
+    si.hStdError = hOut;
+    si.hStdInput = hIn;
+
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&pi, sizeof(pi));
+    std::string cmdLine = "cmd.exe /c " + command;
+
+    // Job Object：关闭时终止整个进程树（cmd 及其子进程），避免超时后遗留子进程占用控制台
+    HANDLE job = CreateJobObjectA(NULL, NULL);
+    if (job)
+    {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji;
+        ZeroMemory(&ji, sizeof(ji));
+        ji.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji));
+    }
+
+    BOOL created = CreateProcessA(NULL, &cmdLine[0], NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
+    CloseHandle(hOut);
+    CloseHandle(hIn);
+    if (!created)
+    {
+        if (job) CloseHandle(job);
+        DeleteFileA(outPath);
+        return "Tool Error: 无法启动命令进程";
+    }
+    if (job)
+        AssignProcessToJobObject(job, pi.hProcess);
+
+    DWORD waitResult = WaitForSingleObject(pi.hProcess, timeoutMs);
+    if (waitResult == WAIT_TIMEOUT)
+    {
+        if (job)
+            CloseHandle(job); // KILL_ON_JOB_CLOSE：终止整个进程树
+        TerminateProcess(pi.hProcess, 1);
+        WaitForSingleObject(pi.hProcess, 5000);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        DeleteFileA(outPath);
+        return "Tool Error: 命令执行超时（已终止），请改用更快或非交互的命令。";
+    }
+    if (job)
+        CloseHandle(job);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+    std::string result = readFile(outPath);
+    DeleteFileA(outPath);
+    if (result.find("Tool Error") != std::string::npos)
+        result.clear();
+    if (result.empty())
+        return "(无输出)";
+    if (result.length() > 8000)
+        result = result.substr(0, 8000) + "\n... (截断)";
     return result;
 }
 
