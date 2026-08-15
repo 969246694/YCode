@@ -5,6 +5,8 @@
 
 namespace ycode {
 
+class Texture2D;
+
 struct Color {
     std::uint8_t r = 255;
     std::uint8_t g = 255;
@@ -21,6 +23,7 @@ public:
 
     void fillRect(float x, float y, float width, float height, Color color);
     void strokeRect(float x, float y, float width, float height, Color color, int thickness = 1);
+    void drawImage(const Texture2D& texture, float x, float y, float width, float height);
 
 private:
     void* nativeDc_ = nullptr;

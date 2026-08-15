@@ -66,6 +66,30 @@ const Entity* Scene::findEntityByName(const std::string& name) const
     return it == entities_.end() ? nullptr : &(*it);
 }
 
+std::vector<Entity*> Scene::findEntitiesByProperty(const std::string& key, const std::string& value)
+{
+    std::vector<Entity*> result;
+    for (Entity& entity : entities_)
+    {
+        auto it = entity.properties.find(key);
+        if (it != entity.properties.end() && it->second == value)
+            result.push_back(&entity);
+    }
+    return result;
+}
+
+std::vector<const Entity*> Scene::findEntitiesByProperty(const std::string& key, const std::string& value) const
+{
+    std::vector<const Entity*> result;
+    for (const Entity& entity : entities_)
+    {
+        auto it = entity.properties.find(key);
+        if (it != entity.properties.end() && it->second == value)
+            result.push_back(&entity);
+    }
+    return result;
+}
+
 std::vector<Entity>& Scene::entities()
 {
     return entities_;

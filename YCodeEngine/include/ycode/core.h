@@ -11,6 +11,8 @@
 #include "ycode/resource_manager.h"
 #include "ycode/scene.h"
 #include "ycode/scene_loader.h"
+#include "ycode/texture.h"
+#include "ycode/audio.h"
 #include "ycode/version.h"
 #include "ycode/window.h"
 

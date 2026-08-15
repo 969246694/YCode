@@ -1,4 +1,5 @@
 #include "ycode/canvas2d.h"
+#include "ycode/texture.h"
 
 #include <algorithm>
 #include <windows.h>
@@ -69,6 +70,31 @@ void Canvas2D::strokeRect(float x, float y, float width, float height, Color col
     SelectObject(dc, oldBrush);
     SelectObject(dc, oldPen);
     DeleteObject(pen);
+}
+
+void Canvas2D::drawImage(const Texture2D& texture, float x, float y, float width, float height)
+{
+    HDC dc = static_cast<HDC>(nativeDc_);
+    HBITMAP hbitmap = static_cast<HBITMAP>(texture.nativeHandle());
+    if (!dc || !hbitmap)
+        return;
+
+    HDC memDc = CreateCompatibleDC(dc);
+    if (!memDc)
+        return;
+    HGDIOBJ oldBitmap = SelectObject(memDc, hbitmap);
+
+    BITMAP bm;
+    if (GetObject(hbitmap, sizeof(bm), &bm) != 0)
+    {
+        StretchBlt(dc,
+                   static_cast<int>(x), static_cast<int>(y),
+                   static_cast<int>(width), static_cast<int>(height),
+                   memDc, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+    }
+
+    SelectObject(memDc, oldBitmap);
+    DeleteDC(memDc);
 }
 
 } // namespace ycode

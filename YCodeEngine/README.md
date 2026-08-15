@@ -106,6 +106,35 @@ ycode::EntityId hit = engine.physics().castRay(from, to, &hitPoint);
 if (hit != ycode::kInvalidEntityId) { /* 命中了实体 hit */ }
 ```
 
+## Textures & sprites
+
+`Texture2D` loads PNG/BMP/JPG/GIF (GDI+ on Windows) and draws them via `Canvas2D`:
+
+```cpp
+ycode::Texture2D tex;
+if (tex.loadFromFile("assets/player.png"))
+    canvas.drawImage(tex, x, y, width, height);
+```
+
+## Audio
+
+`AudioPlayer` plays WAV files (Windows `PlaySound`, async):
+
+```cpp
+ycode::AudioPlayer audio;
+audio.playWav("assets/hit.wav");      // 播放一次
+audio.playWav("assets/bgm.wav", true); // 循环播放
+audio.stop();
+```
+
+## Entity property queries
+
+`Scene` can find entities by their `properties` map (loaded from scene JSON):
+
+```cpp
+auto heroes = scene.findEntitiesByProperty("kind", "hero");
+```
+
 Circle colliders are supported via the `circle` field (mutually exclusive with `box`; if both present, `circle` wins):
 
 ```json

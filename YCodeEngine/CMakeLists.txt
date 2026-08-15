@@ -46,11 +46,15 @@ if(WIN32)
     target_sources(ycode_engine PRIVATE
         src/canvas2d_win32.cpp
         src/window_win32.cpp
+        src/texture_win32.cpp
+        src/audio_win32.cpp
     )
 else()
     target_sources(ycode_engine PRIVATE
         src/canvas2d_null.cpp
         src/window_null.cpp
+        src/texture_null.cpp
+        src/audio_null.cpp
     )
 endif()
 
@@ -65,7 +69,7 @@ target_compile_features(ycode_engine PUBLIC cxx_std_17)
 
 if(WIN32)
     target_compile_definitions(ycode_engine PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(ycode_engine PUBLIC box2d_vendor user32 gdi32)
+    target_link_libraries(ycode_engine PUBLIC box2d_vendor user32 gdi32 gdiplus winmm)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(ycode_engine PUBLIC box2d_vendor dl)
 else()

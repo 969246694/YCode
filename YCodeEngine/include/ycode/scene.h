@@ -89,6 +89,10 @@ public:
     Entity* findEntityByName(const std::string& name);
     const Entity* findEntityByName(const std::string& name) const;
 
+    // 按属性键值查找实体（例如 properties["kind"] == "hero"）
+    std::vector<Entity*> findEntitiesByProperty(const std::string& key, const std::string& value);
+    std::vector<const Entity*> findEntitiesByProperty(const std::string& key, const std::string& value) const;
+
     std::vector<Entity>& entities();
     const std::vector<Entity>& entities() const;
     std::size_t entityCount() const;

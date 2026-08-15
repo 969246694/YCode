@@ -4,6 +4,7 @@
 #include "ycode/resource_manager.h"
 #include "ycode/scene.h"
 #include "ycode/scene_loader.h"
+#include "ycode/texture.h"
 
 #include <cmath>
 #include <cstddef>
@@ -499,6 +500,82 @@ static void testEngineLifecycle()
     CHECK(!engine.isRunning());
 }
 
+// ------------------------------------------------------------
+// 贴图加载（GDI+ 解码 BMP）与按属性检索实体
+// ------------------------------------------------------------
+static bool writeTestBmp(const char* path, int w, int h)
+{
+    const int rowSize = ((w * 3 + 3) / 4) * 4;
+    const int dataSize = rowSize * h;
+    const int fileSize = 14 + 40 + dataSize;
+    std::ofstream f(path, std::ios::binary);
+    if (!f)
+        return false;
+
+    unsigned char header[14] = {'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0};
+    header[2] = static_cast<unsigned char>(fileSize & 0xFF);
+    header[3] = static_cast<unsigned char>((fileSize >> 8) & 0xFF);
+    header[4] = static_cast<unsigned char>((fileSize >> 16) & 0xFF);
+    header[5] = static_cast<unsigned char>((fileSize >> 24) & 0xFF);
+    f.write(reinterpret_cast<const char*>(header), 14);
+
+    unsigned char info[40] = {0};
+    info[0] = 40;
+    info[4] = static_cast<unsigned char>(w & 0xFF);
+    info[5] = static_cast<unsigned char>((w >> 8) & 0xFF);
+    info[8] = static_cast<unsigned char>(h & 0xFF);
+    info[9] = static_cast<unsigned char>((h >> 8) & 0xFF);
+    info[12] = 1;  // planes
+    info[14] = 24; // bpp
+    f.write(reinterpret_cast<const char*>(info), 40);
+
+    std::vector<unsigned char> row(static_cast<size_t>(rowSize), 0);
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            row[static_cast<size_t>(x) * 3 + 0] = 0;   // B
+            row[static_cast<size_t>(x) * 3 + 1] = 0;   // G
+            row[static_cast<size_t>(x) * 3 + 2] = 255; // R
+        }
+        f.write(reinterpret_cast<const char*>(row.data()), rowSize);
+    }
+    return true;
+}
+
+static void testTextureAndProperties()
+{
+    const char* bmpPath = "ycode_engine_test_tmp.bmp";
+    if (writeTestBmp(bmpPath, 8, 6))
+    {
+        ycode::Texture2D tex;
+        CHECK(tex.loadFromFile(bmpPath));
+        CHECK(tex.valid());
+        CHECK_EQ(tex.width(), 8);
+        CHECK_EQ(tex.height(), 6);
+    }
+    std::remove(bmpPath);
+
+    ycode::Texture2D bad;
+    CHECK(!bad.loadFromFile("__no_such_image__.png"));
+    CHECK(!bad.valid());
+
+    ycode::Scene scene;
+    ycode::Entity& a = scene.createEntity("Hero");
+    a.properties["kind"] = "hero";
+    a.properties["hp"] = "100";
+    ycode::Entity& b = scene.createEntity("Monster");
+    b.properties["kind"] = "monster";
+    ycode::Entity& c = scene.createEntity("Hero2");
+    c.properties["kind"] = "hero";
+
+    auto heroes = scene.findEntitiesByProperty("kind", "hero");
+    CHECK_EQ(heroes.size(), std::size_t(2));
+    CHECK_EQ(scene.findEntitiesByProperty("kind", "monster").size(), std::size_t(1));
+    CHECK_EQ(scene.findEntitiesByProperty("kind", "nope").size(), std::size_t(0));
+    CHECK_EQ(scene.findEntitiesByProperty("hp", "100").size(), std::size_t(1));
+}
+
 int main()
 {
     testEventBus();
@@ -509,6 +586,7 @@ int main()
     testPhysics();
     testEngineLifecycle();
     testFileIo();
+    testTextureAndProperties();
 
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
     if (g_failures > 0)

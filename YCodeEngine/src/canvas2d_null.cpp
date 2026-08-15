@@ -1,4 +1,5 @@
 #include "ycode/canvas2d.h"
+#include "ycode/texture.h"
 
 namespace ycode {
 
@@ -24,6 +25,10 @@ void Canvas2D::fillRect(float, float, float, float, Color)
 }
 
 void Canvas2D::strokeRect(float, float, float, float, Color, int)
+{
+}
+
+void Canvas2D::drawImage(const Texture2D&, float, float, float, float)
 {
 }
 
