@@ -549,10 +549,15 @@ static void testTextureAndProperties()
     if (writeTestBmp(bmpPath, 8, 6))
     {
         ycode::Texture2D tex;
+#ifdef _WIN32
         CHECK(tex.loadFromFile(bmpPath));
         CHECK(tex.valid());
         CHECK_EQ(tex.width(), 8);
         CHECK_EQ(tex.height(), 6);
+#else
+        CHECK(!tex.loadFromFile(bmpPath)); // 非 Windows 平台无 GDI+，不支持加载
+        CHECK(!tex.valid());
+#endif
     }
     std::remove(bmpPath);
 
