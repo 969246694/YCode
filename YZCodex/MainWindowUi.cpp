@@ -223,7 +223,12 @@ void MainWindow::setupUI()
         "QPushButton:pressed {"
         "    background: #005999;"
         "}"
+        "QPushButton:disabled {"
+        "    background: #3E3E42;"
+        "    color: #858585;"
+        "}"
     );
+    sendButton->setEnabled(false); // 输入为空时不可发送
 
     QHBoxLayout *inputRow = new QHBoxLayout();
     inputRow->addWidget(inputField);
@@ -243,6 +248,9 @@ void MainWindow::setupUI()
     // 连接信号
     connect(sendButton, &QPushButton::clicked, this, &MainWindow::sendMessage);
     connect(inputField, &QLineEdit::returnPressed, this, &MainWindow::sendMessage);
+    connect(inputField, &QLineEdit::textChanged, this, [this](const QString &text) {
+        sendButton->setEnabled(!text.trimmed().isEmpty());
+    });
 }
 
 // ============================================================
