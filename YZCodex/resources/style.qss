@@ -82,13 +82,78 @@ QTabBar::tab:hover {
     background-color: #3e3e42;
 }
 
-QTabBar::close-button {
-    image: url(close.png);
-    subcontrol-position: right;
+QTabBar::tab:!selected:hover {
+    background-color: #3e3e42;
 }
 
-QTabBar::close-button:hover {
-    background-color: #c42b1c;
+/* 组合框 */
+QComboBox {
+    background-color: #3c3c3c;
+    color: #d4d4d4;
+    border: 1px solid #3e3e42;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+QComboBox:hover {
+    border-color: #007acc;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 22px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #2d2d30;
+    color: #d4d4d4;
+    selection-background-color: #007acc;
+    selection-color: white;
+    border: 1px solid #3e3e42;
+}
+
+/* 编辑器与终端 */
+QPlainTextEdit, QTextEdit {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    selection-background-color: #264f78;
+    border: 1px solid #3e3e42;
+    border-radius: 2px;
+}
+
+QPlainTextEdit:focus, QTextEdit:focus {
+    border-color: #007acc;
+}
+
+/* 文件树 */
+QTreeView {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    border: none;
+    outline: none;
+}
+
+QTreeView::item {
+    padding: 3px 6px;
+    border-radius: 2px;
+}
+
+QTreeView::item:hover {
+    background-color: #2a2d2e;
+}
+
+QTreeView::item:selected {
+    background-color: #37373d;
+    color: #ffffff;
+}
+
+/* 提示 */
+QToolTip {
+    background-color: #3c3c3c;
+    color: #d4d4d4;
+    border: 1px solid #5c5c5c;
+    padding: 4px 8px;
+    border-radius: 4px;
 }
 
 QListWidget {
@@ -116,20 +181,21 @@ QLineEdit {
     background-color: #3c3c3c;
     color: #d4d4d4;
     border: 1px solid #3e3e42;
-    padding: 4px 8px;
-    border-radius: 2px;
+    padding: 4px 10px;
+    border-radius: 4px;
 }
 
 QLineEdit:focus {
     border-color: #007acc;
+    background-color: #333333;
 }
 
 QPushButton {
     background-color: #007acc;
     color: white;
     border: none;
-    padding: 6px 12px;
-    border-radius: 2px;
+    padding: 6px 14px;
+    border-radius: 4px;
 }
 
 QPushButton:hover {

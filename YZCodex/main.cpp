@@ -1,5 +1,7 @@
 #include <QApplication>
 #include <QStyleFactory>
+#include <QPropertyAnimation>
+#include <QAbstractAnimation>
 #include "MainWindow.h"
 
 int main(int argc, char *argv[])
@@ -32,6 +34,13 @@ int main(int argc, char *argv[])
 
     MainWindow window;
     window.show();
+
+    // 窗口启动淡入
+    QPropertyAnimation *fade = new QPropertyAnimation(&window, "windowOpacity");
+    fade->setDuration(300);
+    fade->setStartValue(0.0);
+    fade->setEndValue(1.0);
+    fade->start(QAbstractAnimation::DeleteWhenStopped);
 
     return app.exec();
 }

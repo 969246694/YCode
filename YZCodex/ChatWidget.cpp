@@ -4,6 +4,28 @@
 #include <QScrollBar>
 #include <QTimer>
 #include <QDateTime>
+#include <QGraphicsOpacityEffect>
+#include <QPropertyAnimation>
+#include <QAbstractAnimation>
+
+namespace {
+
+// 新消息淡入（200ms 透明度 0->1），完成后移除特效避免影响渲染
+void fadeInWidget(QWidget *widget)
+{
+    if (!widget)
+        return;
+    QGraphicsOpacityEffect *effect = new QGraphicsOpacityEffect(widget);
+    widget->setGraphicsEffect(effect);
+    QPropertyAnimation *anim = new QPropertyAnimation(effect, "opacity", widget);
+    anim->setDuration(200);
+    anim->setStartValue(0.0);
+    anim->setEndValue(1.0);
+    QObject::connect(anim, &QPropertyAnimation::finished, effect, &QObject::deleteLater);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+} // namespace
 
 ChatWidget::ChatWidget(QWidget *parent)
     : QWidget(parent),
@@ -48,6 +70,7 @@ void ChatWidget::appendUserMessage(const QString &message)
 {
     QWidget *messageWidget = createMessageWidget(message, true);
     scrollLayout->addWidget(messageWidget);
+    fadeInWidget(messageWidget);
 
     // 自动滚动到底部
     QScrollBar *scrollBar = scrollArea->verticalScrollBar();
@@ -59,6 +82,7 @@ void ChatWidget::appendAssistantMessage(const QString &message)
 {
     QWidget *messageWidget = createMessageWidget(message, false);
     scrollLayout->addWidget(messageWidget);
+    fadeInWidget(messageWidget);
 
     // 自动滚动到底部
     QScrollBar *scrollBar = scrollArea->verticalScrollBar();

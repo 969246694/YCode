@@ -57,6 +57,7 @@
 - 将约 2800 行的 `MainWindow.cpp` 按职责拆分为 4 个文件：`MainWindow.cpp`（核心逻辑与回调）、`MainWindowUi.cpp`（界面搭建）、`MainWindowTheme.cpp`（主题与配色）、`MainWindowGame.cpp`（游戏开发），纯重构、行为不变。
 - 新增游戏「实时预览」：`游戏开发 → 实时预览` 一键构建并运行游戏；用 `QFileSystemWatcher` 监视游戏项目 `src/`、`scenes/` 与 `CMakeLists.txt`，保存文件后防抖自动重建并重启游戏（热重载循环）。
 - 升级「新建 YCode 游戏项目」模板为挡板接球 demo：圆形碰撞体 + 接触事件（球撞挡板/地面打印）+ 键盘控制挡板；并修复模板 CMake 的两个问题（`add_subdirectory` 内 `project()` 重置 C++ 标准、缺 `/utf-8`），已用真实构建验证模板可编译。
+- UI/动效完善：聊天气泡新消息淡入动画（200ms）；主窗口启动淡入（300ms）；`style.qss` 增强（组合框、编辑器/终端、文件树、提示框样式，圆角与聚焦态，修复缺失的 close.png 引用）。
 
 ### YCodeEngine
 
