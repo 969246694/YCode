@@ -9,6 +9,17 @@ YCode 是一个 Windows 桌面 AI 编程助手项目，包含：
 - `YCodeEngine/`: YCode 内置 C++17 游戏引擎内核，提供场景、2D 物理（盒/圆/胶囊碰撞、接触与命中事件、射线检测）、贴图绘制、音频、窗口绘制、事件总线、插件 ABI、插件加载器和游戏项目模板。
 - `build.bat`、`run_ycode.bat`、`manage_api_key.ps1`: Windows 下的构建、启动和 API Key 管理脚本。
 
+## Agent 工具（23 个）
+
+| 类别 | 工具 |
+|---|---|
+| 文件 | `read_file` `write_file` `list_directory` `search_files` `search_content` `create_directory` `delete_file` `move_file` `get_file_info` `download_file` |
+| 命令 | `execute_command`（危险命令拦截 + 10 分钟超时） |
+| 工程 | `git_status` `git_diff` `git_commit` `git_push`（提交/推送需授权） |
+| 网络 | `web_search` `fetch_url` |
+| 协作 | `tasks`（任务清单） `memory`（长期记忆） `think`（显式思考） |
+| 自更新 | `restart_agent` `rebuild_and_restart_ycode` `apply_self_changes` |
+
 ## 依赖
 
 - Windows

@@ -976,11 +976,16 @@ private:
     // ---- 联网搜索 ----
     std::string webSearchTool(const std::string &query)
     {
-        std::string url = "https://www.baidu.com/s?wd=" + urlEncode(query);
-        std::string html = fetchUrlText(url);
-        if (html.empty())
-            return "web_search: 无法访问搜索服务（可能网络受限或超时）。";
-        return extractSearchResults(html);
+        // 先试百度，失败（网络受限/空结果）时回退到 Bing
+        std::string html = fetchUrlText("https://www.baidu.com/s?wd=" + urlEncode(query));
+        if (!html.empty())
+            return extractSearchResults(html);
+
+        html = fetchUrlText("https://www.bing.com/search?q=" + urlEncode(query));
+        if (!html.empty())
+            return extractSearchResults(html);
+
+        return "web_search: 无法访问搜索服务（可能网络受限或超时）。";
     }
 
     // ---- 抓取网页/文本 ----
