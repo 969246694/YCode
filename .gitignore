@@ -31,6 +31,7 @@ cmake_install.cmake
 agent_session.json
 agent_tasks.json
 agent_memory.json
+agent_crash.log
 *.session
 *.test
 _agent_restart.bat

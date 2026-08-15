@@ -46,6 +46,8 @@
 - 修正系统提示词字符串拼接缺空格的问题，改用 `\n` 分隔。
 - 修复标准输入关闭时 Agent 无限空转的问题（EOF 时干净退出）。
 - 支持通过 `YCODE_API_URL` / `YCODE_MODEL` 环境变量覆盖 API 端点与模型名。
+- 修复流式回调崩溃（`0xc0000409`）：`std::string` 的 `append`/`substr` 可能在内存压力下抛 `bad_alloc` 并从 curl 的 C 回调逃逸触发 `std::terminate`；现整个回调体均包在 `try/catch` 内，任何异常都不会逃逸。
+- 新增崩溃诊断：`set_terminate` + 向量化异常处理，把异常类型与调用栈写入 `agent_crash.log`；`build.bat` 增加 `/Zi`+`/DEBUG` 生成 PDB 以便解析函数名。
 
 ### YZCodex（Qt 客户端）
 

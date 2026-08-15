@@ -16,6 +16,9 @@
 #include "nlohmann/json.hpp"
 #include <windows.h>
 #include <shellapi.h>
+#include <exception>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
 
 using json = nlohmann::json;
 
@@ -293,31 +296,31 @@ size_t StreamWriteCallback(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
     StreamContext *ctx = static_cast<StreamContext *>(userdata);
     size_t total = size * nmemb;
-    const char *data = static_cast<const char *>(ptr);
-    ctx->raw.append(data, total);
-    ctx->lineBuffer.append(data, total);
-
-    size_t pos;
-    while ((pos = ctx->lineBuffer.find('\n')) != std::string::npos)
+    try
     {
-        std::string line = ctx->lineBuffer.substr(0, pos);
-        ctx->lineBuffer.erase(0, pos + 1);
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
+        const char *data = static_cast<const char *>(ptr);
+        ctx->raw.append(data, total);
+        ctx->lineBuffer.append(data, total);
 
-        if (line.rfind("data:", 0) != 0)
-            continue;
-
-        std::string payload = line.substr(5);
-        size_t first = payload.find_first_not_of(' ');
-        if (first == std::string::npos)
-            continue;
-        payload = payload.substr(first);
-        if (payload == "[DONE]")
-            continue;
-
-        try
+        size_t pos;
+        while ((pos = ctx->lineBuffer.find('\n')) != std::string::npos)
         {
+            std::string line = ctx->lineBuffer.substr(0, pos);
+            ctx->lineBuffer.erase(0, pos + 1);
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+
+            if (line.rfind("data:", 0) != 0)
+                continue;
+
+            std::string payload = line.substr(5);
+            size_t first = payload.find_first_not_of(' ');
+            if (first == std::string::npos)
+                continue;
+            payload = payload.substr(first);
+            if (payload == "[DONE]")
+                continue;
+
             json chunk = json::parse(payload);
             if (!chunk.contains("choices") || chunk["choices"].empty())
                 continue;
@@ -362,8 +365,8 @@ size_t StreamWriteCallback(void *ptr, size_t size, size_t nmemb, void *userdata)
                 }
             }
         }
-        catch (...) { /* 忽略任何异常，避免异常逃逸出 curl 的 C 回调导致进程崩溃 */ }
     }
+    catch (...) { /* 整个回调体都在捕获范围内：任何 std::string/json 异常（如 bad_alloc）都不会逃逸出 curl 的 C 回调 */ }
     return total;
 }
 
@@ -458,6 +461,75 @@ static std::string fetchUrlText(const std::string &url)
     curl_easy_cleanup(curl);
     if (res != CURLE_OK) return "";
     return result;
+}
+
+// ============================================================
+// 崩溃诊断：把未处理异常的类型与调用栈写入 agent_crash.log
+// ============================================================
+static void logCrashStack(FILE *f)
+{
+    static bool symInit = false;
+    if (!symInit)
+        symInit = SymInitialize(GetCurrentProcess(), NULL, TRUE) == TRUE;
+
+    void *stack[32];
+    USHORT frames = CaptureStackBackTrace(0, 32, stack, NULL);
+    for (USHORT i = 0; i < frames; i++)
+    {
+        DWORD64 addr = (DWORD64)stack[i];
+        if (symInit)
+        {
+            char buf[sizeof(SYMBOL_INFO) + 256] = {0};
+            SYMBOL_INFO *sym = (SYMBOL_INFO *)buf;
+            sym->SizeOfStruct = sizeof(SYMBOL_INFO);
+            sym->MaxNameLen = 255;
+            DWORD64 disp = 0;
+            if (SymFromAddr(GetCurrentProcess(), addr, &disp, sym))
+                fprintf(f, "  [%u] %p %s+0x%llX\n", i, stack[i], sym->Name, (unsigned long long)disp);
+            else
+                fprintf(f, "  [%u] %p\n", i, stack[i]);
+        }
+        else
+        {
+            fprintf(f, "  [%u] %p\n", i, stack[i]);
+        }
+    }
+}
+
+static void terminateHandler()
+{
+    FILE *f = fopen("agent_crash.log", "a");
+    if (f)
+    {
+        fprintf(f, "\n=== std::terminate %s ===\n", __TIMESTAMP__);
+        if (std::current_exception())
+        {
+            try { std::rethrow_exception(std::current_exception()); }
+            catch (const std::exception &e) { fprintf(f, "exception: %s\n", e.what()); }
+            catch (...) { fprintf(f, "exception: (未知类型)\n"); }
+        }
+        else
+        {
+            fprintf(f, "exception: (无活动异常)\n");
+        }
+        logCrashStack(f);
+        fclose(f);
+    }
+    std::abort();
+}
+
+static LONG WINAPI CrashVectoredHandler(PEXCEPTION_POINTERS info)
+{
+    FILE *f = fopen("agent_crash.log", "a");
+    if (f)
+    {
+        fprintf(f, "\n=== vectored exception 0x%08lX at %p %s ===\n",
+                (unsigned long)info->ExceptionRecord->ExceptionCode,
+                info->ExceptionRecord->ExceptionAddress, __TIMESTAMP__);
+        logCrashStack(f);
+        fclose(f);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 
 // ============================================================
@@ -1419,6 +1491,8 @@ int main(int argc, char *argv[])
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
     SetConsoleTitleA("YCode Agent v2.0 - World Domination Edition");
+    AddVectoredExceptionHandler(1, CrashVectoredHandler);
+    std::set_terminate(terminateHandler);
 #endif
 
     std::cout << "========================================" << std::endl;
