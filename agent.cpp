@@ -1252,7 +1252,7 @@ private:
             std::string path = args.contains("path") ? args["path"].get<std::string>() : ".";
             if (hasShellMetacharacter(path))
                 return "Tool Error: path 含非法字符，已拒绝执行（避免命令注入）。";
-            return executeShellCommand("dir \"" + path + "\"");
+            return executeShellCommand("dir /b \"" + path + "\"");
         }
         if (toolName == "execute_command")
         {
