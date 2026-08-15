@@ -192,7 +192,7 @@ void MainWindow::setupUI()
     inputLayout->setSpacing(6);
 
     inputField = new QLineEdit();
-    inputField->setPlaceholderText("输入问题... (Ctrl+Enter 发送)");
+    inputField->setPlaceholderText("输入问题... (Enter 发送)");
     inputField->setStyleSheet(
         "QLineEdit {"
         "    background: #3C3C3C;"

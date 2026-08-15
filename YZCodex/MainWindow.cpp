@@ -586,10 +586,15 @@ void MainWindow::clearChat()
 void MainWindow::onAgentOutput(const QString &output)
 {
     if (assistantStreaming)
+    {
         chatDisplay->appendToLastAssistant(output);
+        // 流式期间状态栏由 onAssistantStreamStarted 的轮播定时器管理，不要覆盖
+    }
     else
+    {
         appendToChat(output, false);
-    statusMessage->setText("就绪");
+        statusMessage->setText("就绪");
+    }
 }
 
 void MainWindow::onAgentError(const QString &error)
