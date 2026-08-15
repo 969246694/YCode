@@ -8,6 +8,9 @@
 #include <QPropertyAnimation>
 #include <QAbstractAnimation>
 #include <QEasingCurve>
+#include <QToolButton>
+#include <QApplication>
+#include <QClipboard>
 
 namespace {
 
@@ -131,7 +134,7 @@ void ChatWidget::startTypingIndicator()
 
     typingLabel = new QLabel("Agent 正在思考");
     typingLabel->setProperty("messageRole", "typingIndicator");
-    typingLabel->setMaximumWidth(400);
+    typingLabel->setMaximumWidth(480);
     typingLabel->setStyleSheet(QString(
         "QLabel {"
         "    background-color: %1;"
@@ -151,11 +154,19 @@ void ChatWidget::startTypingIndicator()
     scrollToBottomSmooth(scrollArea);
 
     typingTimer = new QTimer(this);
-    typingTimer->setInterval(400);
-    QObject::connect(typingTimer, &QTimer::timeout, this, [this]() {
-        typingDotCount = (typingDotCount + 1) % 4;
-        typingLabel->setText(QStringLiteral("Agent 正在思考") + QString(typingDotCount, QLatin1Char('.')));
+    typingTimer->setInterval(300);
+    auto renderDots = [this]() {
+        // 三圆点弹跳动画：●○○ → ○●○ → ○○●
+        QString dots;
+        for (int i = 0; i < 3; ++i)
+            dots += (i == typingDotCount) ? QStringLiteral("●") : QStringLiteral("○");
+        typingLabel->setText(QStringLiteral("Agent 正在思考  ") + dots);
+    };
+    QObject::connect(typingTimer, &QTimer::timeout, this, [this, renderDots]() {
+        typingDotCount = (typingDotCount + 1) % 3;
+        renderDots();
     });
+    renderDots(); // 立即显示第一帧，避免等待首个 tick
     typingTimer->start();
 }
 
@@ -324,7 +335,7 @@ QWidget *ChatWidget::createMessageWidget(const QString &message, bool isUser)
     messageLabel->setProperty("messageRole", isUser ? "userMessage" : "assistantMessage");
     messageLabel->setWordWrap(true);
     messageLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    messageLabel->setMaximumWidth(400);
+    messageLabel->setMaximumWidth(480);
     styleMessageLabel(messageLabel, isUser);
 
     // 记录最近一个助手消息的文本标签，供流式追加使用
@@ -336,12 +347,50 @@ QWidget *ChatWidget::createMessageWidget(const QString &message, bool isUser)
     styleTimeLabel(timeLabel);
     timeLabel->setAlignment(Qt::AlignBottom | (isUser ? Qt::AlignRight : Qt::AlignLeft));
 
+    // 复制按钮：一键复制消息内容（对代码片段尤其有用）
+    QToolButton *copyButton = new QToolButton();
+    copyButton->setText("复制");
+    copyButton->setToolTip("复制消息内容");
+    copyButton->setCursor(Qt::PointingHandCursor);
+    copyButton->setStyleSheet(
+        "QToolButton {"
+        "    background: transparent;"
+        "    color: #777777;"
+        "    border: none;"
+        "    font-size: 10px;"
+        "    padding: 2px 6px;"
+        "    border-radius: 3px;"
+        "}"
+        "QToolButton:hover { color: #007ACC; background: #2A2D2E; }");
+    QObject::connect(copyButton, &QToolButton::clicked, this, [messageLabel, copyButton]() {
+        QApplication::clipboard()->setText(messageLabel->text());
+        copyButton->setText("已复制");
+        QTimer::singleShot(1200, copyButton, [copyButton]() { copyButton->setText("复制"); });
+    });
+
     // 组装布局
     QVBoxLayout *bubbleLayout = new QVBoxLayout();
     bubbleLayout->setContentsMargins(0, 0, 0, 0);
     bubbleLayout->setSpacing(4);
     bubbleLayout->addWidget(messageLabel);
-    bubbleLayout->addWidget(timeLabel);
+    QHBoxLayout *metaRow = new QHBoxLayout();
+    metaRow->setContentsMargins(0, 0, 0, 0);
+    metaRow->setSpacing(6);
+    if (isUser)
+    {
+        // 用户消息：时间靠右，复制按钮紧随其后
+        metaRow->addStretch();
+        metaRow->addWidget(timeLabel);
+        metaRow->addWidget(copyButton);
+    }
+    else
+    {
+        // 助手消息：时间靠左，复制按钮靠右
+        metaRow->addWidget(timeLabel);
+        metaRow->addStretch();
+        metaRow->addWidget(copyButton);
+    }
+    bubbleLayout->addLayout(metaRow);
 
     if (isUser)
     {
