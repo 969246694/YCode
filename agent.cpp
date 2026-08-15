@@ -359,6 +359,92 @@ size_t StreamWriteCallback(void *ptr, size_t size, size_t nmemb, void *userdata)
 }
 
 // ============================================================
+// 网络搜索与文本处理辅助
+// ============================================================
+static std::string urlEncode(const std::string &value)
+{
+    std::ostringstream out;
+    for (unsigned char c : value)
+    {
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+            out << c;
+        else
+            out << '%' << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << (int)c;
+    }
+    return out.str();
+}
+
+static std::string stripHtmlTags(std::string text)
+{
+    std::string out;
+    out.reserve(text.size());
+    bool inTag = false;
+    for (char c : text)
+    {
+        if (c == '<') { inTag = true; continue; }
+        if (c == '>') { inTag = false; continue; }
+        if (!inTag) out.push_back(c);
+    }
+    size_t pos;
+    while ((pos = out.find("&amp;")) != std::string::npos) out.replace(pos, 5, "&");
+    while ((pos = out.find("&lt;")) != std::string::npos) out.replace(pos, 4, "<");
+    while ((pos = out.find("&gt;")) != std::string::npos) out.replace(pos, 4, ">");
+    while ((pos = out.find("&quot;")) != std::string::npos) out.replace(pos, 6, "\"");
+    while ((pos = out.find("&#39;")) != std::string::npos) out.replace(pos, 5, "'");
+    while ((pos = out.find("&nbsp;")) != std::string::npos) out.replace(pos, 6, " ");
+    return out;
+}
+
+static std::string extractSearchResults(const std::string &html)
+{
+    std::string text = stripHtmlTags(html);
+    std::string compact;
+    compact.reserve(text.size());
+    bool prevSpace = false;
+    for (char c : text)
+    {
+        if (c == '\n' || c == '\r' || c == '\t')
+            c = ' ';
+        if (c == ' ' && prevSpace)
+            continue;
+        compact.push_back(c);
+        prevSpace = (c == ' ');
+    }
+    if (compact.length() > 8000)
+        compact = compact.substr(0, 8000) + "\n...(截断)";
+    return "搜索结果（尽力提取，可能不完整）：\n" + compact;
+}
+
+static size_t StringWriteCallback(void *ptr, size_t size, size_t nmemb, void *userdata)
+{
+    std::string *out = static_cast<std::string *>(userdata);
+    size_t total = size * nmemb;
+    out->append(static_cast<const char *>(ptr), total);
+    return total;
+}
+
+static std::string fetchUrlText(const std::string &url)
+{
+    std::string result;
+    CURL *curl = curl_easy_init();
+    if (!curl) return "";
+    struct curl_slist *headers = nullptr;
+    headers = curl_slist_append(headers, "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) YCodeAgent");
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, StringWriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    CURLcode res = curl_easy_perform(curl);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+    if (res != CURLE_OK) return "";
+    return result;
+}
+
+// ============================================================
 // 重启 Agent — 发送信号给 YCode 客户端来接管重启
 // ============================================================
 // 新的重启策略：
@@ -671,6 +757,142 @@ private:
         return answer == "y" || answer == "Y" || answer == "yes" || answer == "YES" || answer == "是";
     }
 
+    std::string toolNamesList()
+    {
+        std::string names;
+        for (const auto &t : getTools())
+        {
+            if (!names.empty()) names += ", ";
+            names += t["function"].value("name", std::string("?"));
+        }
+        return names;
+    }
+
+    // ---- Git 工具 ----
+    std::string gitStatusTool()
+    {
+        return executeShellCommand("git -C \"" + projectPath + "\" status --short");
+    }
+
+    std::string gitDiffTool()
+    {
+        return executeShellCommand("git -C \"" + projectPath + "\" diff --stat -- .");
+    }
+
+    std::string gitCommitTool(const std::string &message)
+    {
+        if (message.empty())
+            return "Tool Error: commit message 不能为空。";
+        if (!confirmDangerousOperation("git_commit: " + message))
+            return "已拦截 git_commit（会修改仓库状态）。若用户确实需要，请 /allow-dangerous 授权后重试。";
+        std::string msgFile = projectPath + "\\.git_commit_msg.tmp";
+        if (!writeFile(msgFile, message))
+            return "FAIL: 无法写入提交消息文件";
+        std::string cmd = "git -C \"" + projectPath + "\" add -A && git -C \"" + projectPath + "\" commit -F \"" + msgFile + "\"";
+        std::string result = executeShellCommand(cmd);
+        DeleteFileA(msgFile.c_str());
+        return result;
+    }
+
+    std::string gitPushTool()
+    {
+        if (!confirmDangerousOperation("git_push（推送到远程仓库）"))
+            return "已拦截 git_push。若用户确实需要，请 /allow-dangerous 授权后重试。";
+        std::string branch = executeShellCommand("git -C \"" + projectPath + "\" rev-parse --abbrev-ref HEAD");
+        while (!branch.empty() && (branch.back() == '\n' || branch.back() == '\r'))
+            branch.pop_back();
+        if (branch.empty() || branch == "(无输出)")
+            return "FAIL: 无法获取当前分支";
+        return executeShellCommand("git -C \"" + projectPath + "\" push origin \"" + branch + "\"");
+    }
+
+    // ---- 联网搜索 ----
+    std::string webSearchTool(const std::string &query)
+    {
+        std::string url = "https://www.baidu.com/s?wd=" + urlEncode(query);
+        std::string html = fetchUrlText(url);
+        if (html.empty())
+            return "web_search: 无法访问搜索服务（可能网络受限或超时）。";
+        return extractSearchResults(html);
+    }
+
+    // ---- 任务清单 ----
+    std::string tasksTool(const json &args)
+    {
+        std::string action = args.value("action", std::string("list"));
+        std::string text = args.value("text", std::string(""));
+        int index = args.value("index", 0);
+
+        std::string file = projectPath + "\\agent_tasks.json";
+        json data = json::array();
+        std::string content = readFile(file);
+        if (content.find("Tool Error") == std::string::npos && !content.empty())
+        {
+            try { data = json::parse(content); }
+            catch (...) { data = json::array(); }
+        }
+
+        if (action == "add")
+        {
+            if (text.empty()) return "Tool Error: add 需要 text 参数。";
+            json task;
+            task["text"] = text;
+            task["done"] = false;
+            data.push_back(task);
+            writeFile(file, data.dump(2));
+            return "已添加任务: " + text + "（共 " + std::to_string(data.size()) + " 项）";
+        }
+        if (action == "done")
+        {
+            if (index < 0 || index >= static_cast<int>(data.size())) return "Tool Error: index 越界。";
+            data[index]["done"] = true;
+            writeFile(file, data.dump(2));
+            return "已完成任务 " + std::to_string(index) + ": " + data[index].value("text", std::string(""));
+        }
+        if (data.empty()) return "任务列表为空。";
+        std::string out = "任务列表：\n";
+        for (size_t i = 0; i < data.size(); ++i)
+        {
+            bool done = data[i].value("done", false);
+            out += std::to_string(i + 1) + ". [" + (done ? "x" : " ") + "] " +
+                   data[i].value("text", std::string("")) + "\n";
+        }
+        return out;
+    }
+
+    // ---- 长期记忆 ----
+    std::string memoryTool(const json &args)
+    {
+        std::string action = args.value("action", std::string("recall"));
+        std::string key = args.value("key", std::string("note"));
+        std::string text = args.value("text", std::string(""));
+
+        std::string file = projectPath + "\\agent_memory.json";
+        json data = json::object();
+        std::string content = readFile(file);
+        if (content.find("Tool Error") == std::string::npos && !content.empty())
+        {
+            try { data = json::parse(content); }
+            catch (...) { data = json::object(); }
+        }
+
+        if (action == "save")
+        {
+            if (text.empty()) return "Tool Error: save 需要 text 参数。";
+            data["notes"][key] = text;
+            writeFile(file, data.dump(2));
+            return "已保存记忆 [" + key + "]。";
+        }
+        if (data.contains("notes") && data["notes"].is_object() && !data["notes"].empty())
+        {
+            std::string out = "记忆内容：\n";
+            for (auto it = data["notes"].begin(); it != data["notes"].end(); ++it)
+                out += "[" + it.key() + "] " + it.value().get<std::string>() + "\n";
+            return out;
+        }
+        return "暂无记忆。";
+    }
+
     json getTools()
     {
         json tools = json::array();
@@ -760,6 +982,44 @@ private:
         changedPathsProp["items"]["type"] = "string";
         tools.push_back(makeTool("apply_self_changes", "根据本轮已修改路径自动应用 YCode 自身变化：样式文件热加载；C++/CMake/脚本/图标等自身代码变化触发完整重建并重启。",
             json::object({{"paths", changedPathsProp}}),
+            json::array()));
+
+        // ---- Git 工具 ----
+        tools.push_back(makeTool("git_status", "查看 YCode 仓库的 git 状态（未提交的改动）。",
+            json::object(), json::array()));
+        tools.push_back(makeTool("git_diff", "查看未提交改动的统计摘要（git diff --stat）。",
+            json::object(), json::array()));
+        tools.push_back(makeTool("git_commit", "把所有改动暂存并提交到 git。会修改仓库状态，需用户授权。",
+            json::object({
+                {"message", makeProp("message", "string", "提交说明（subject）")}
+            }),
+            json::array({"message"})));
+        tools.push_back(makeTool("git_push", "把本地提交推送到远程仓库 origin。会修改远程状态，需用户授权。",
+            json::object(), json::array()));
+
+        // ---- 联网搜索 ----
+        tools.push_back(makeTool("web_search", "在网络上搜索关键词（尽力提取结果，可能不完整）。",
+            json::object({
+                {"query", makeProp("query", "string", "搜索关键词")}
+            }),
+            json::array({"query"})));
+
+        // ---- 任务清单 ----
+        tools.push_back(makeTool("tasks", "管理任务清单：action 为 add（新增，需 text）/ done（标记完成，需 index）/ list（默认）。",
+            json::object({
+                {"action", makeProp("action", "string", "add / done / list")},
+                {"text", makeProp("text", "string", "任务内容（action=add 时必填）")},
+                {"index", makeProp("index", "integer", "任务序号，从 0 开始（action=done 时必填）")}
+            }),
+            json::array()));
+
+        // ---- 长期记忆 ----
+        tools.push_back(makeTool("memory", "管理长期记忆：action 为 save（保存，需 key+text）/ recall（默认，查看全部）。",
+            json::object({
+                {"action", makeProp("action", "string", "save / recall")},
+                {"key", makeProp("key", "string", "记忆键名")},
+                {"text", makeProp("text", "string", "记忆内容（action=save 时必填）")}
+            }),
             json::array()));
 
         return tools;
@@ -860,6 +1120,34 @@ private:
         {
             return applySelfChanges(args);
         }
+        if (toolName == "git_status")
+        {
+            return gitStatusTool();
+        }
+        if (toolName == "git_diff")
+        {
+            return gitDiffTool();
+        }
+        if (toolName == "git_commit")
+        {
+            return gitCommitTool(args.value("message", std::string("")));
+        }
+        if (toolName == "git_push")
+        {
+            return gitPushTool();
+        }
+        if (toolName == "web_search")
+        {
+            return webSearchTool(args.value("query", std::string("")));
+        }
+        if (toolName == "tasks")
+        {
+            return tasksTool(args);
+        }
+        if (toolName == "memory")
+        {
+            return memoryTool(args);
+        }
         return "未知工具: " + toolName;
     }
 
@@ -952,6 +1240,7 @@ public:
     void setModel(const std::string &m) { modelName = m; }
     void setAllowDangerousCommands(bool allow) { allowDangerousCommands = allow; }
     bool dangerousCommandsAllowed() const { return allowDangerousCommands; }
+    size_t toolCount() { return getTools().size(); }
 
     std::string chat(const std::string &userMessage, std::vector<json> &conversationHistory)
     {
@@ -1038,15 +1327,15 @@ public:
             : "当前没有打开独立游戏工作区。";
 
         return std::string("你是 YCode Agent v2.0，运行在 Yiyangzai 自制的编程工具中。\n") +
-               "你有14个工具: read_file, write_file, list_directory, execute_command, " +
-               "search_files, search_content, create_directory, delete_file, move_file, get_file_info, download_file, restart_agent, rebuild_and_restart_ycode, apply_self_changes。\n" +
+               "你有" + std::to_string(getTools().size()) + "个工具: " + toolNamesList() + "。\n" +
                "YCode 已内置 YCodeEngine，具备 C++17 游戏引擎、Scene/Entity/Transform2D 场景层、ResourceManager/SceneLoader JSON 场景加载、原生窗口层、Key 输入枚举、Canvas2D 绘制、事件总线、插件 ABI、游戏项目模板和构建工作流。\n" +
                "YCODE_PROJECT_ROOT 是 YCode 自身源码根目录；YCODE_WORKSPACE_ROOT 是用户游戏项目目录。\n" +
                workspaceInfo + "\n" +
                "修改代码前先读取原文件，用write_file写入完整内容。用中文回答，自信幽默。\n" +
+               "增强能力：git_status/git_diff 查看仓库状态；git_commit/git_push 提交并推送（会修改仓库，需用户授权）；web_search 联网搜索；tasks 维护任务清单；memory 保存/读取长期记忆。\n" +
                "凡是修改了 YCode 自身文件，改完后必须调用 apply_self_changes；它会根据路径自动选择热加载、重建或重启。\n" +
                "只有用户明确要求立即重启 Agent 时才直接调用 restart_agent；不要在改完源码后只回复完成。\n" +
-               "安全护栏：execute_command 执行删除/格式化/注册表/环境变量/关机等危险命令，或 delete_file 删除文件/目录时，会被拦截并要求用户授权。被拦截时不要擅自重复尝试，应明确告知用户将要执行的操作，并请用户在聊天中发送 /allow-dangerous 授权（/deny-dangerous 可撤销授权）。";
+               "安全护栏：execute_command 执行删除/格式化/注册表/环境变量/关机等危险命令，delete_file 删除文件/目录，git_commit/git_push 修改仓库时，会被拦截并要求用户授权。被拦截时不要擅自重复尝试，应明确告知用户将要执行的操作，并请用户在聊天中发送 /allow-dangerous 授权（/deny-dangerous 可撤销授权）。";
     }
 
     void trimHistory(std::vector<json> &history)
@@ -1101,7 +1390,7 @@ int main(int argc, char *argv[])
 
     std::cout << "========================================" << std::endl;
     std::cout << "  YCode Agent v2.0 - 世界征服版" << std::endl;
-    std::cout << "  14个工具 | API重试 | 会话持久化 | 自进化分派" << std::endl;
+    std::cout << "  多工具 | API重试 | 会话持久化 | 自进化分派" << std::endl;
     std::cout << "========================================" << std::endl;
 
     std::string apiKey;
@@ -1226,7 +1515,7 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        if (input == "/help") { std::cout << "YCode Agent v2.0 - 14个工具的全能编程助手 | apply_self_changes 按路径热加载/重建/重启 | /restart 重启 Agent | /self-update 重建并重启 YCode | /allow-dangerous 授权危险命令 | /deny-dangerous 撤销授权" << std::endl; continue; }
+        if (input == "/help") { std::cout << "YCode Agent v2.0 - " << agent.toolCount() << "个工具的全能编程助手 | apply_self_changes 按路径热加载/重建/重启 | git_commit/git_push 提交推送 | /restart 重启 Agent | /self-update 重建并重启 YCode | /allow-dangerous 授权危险命令 | /deny-dangerous 撤销授权" << std::endl; continue; }
         if (input.empty()) continue;
 
         if (!managed)

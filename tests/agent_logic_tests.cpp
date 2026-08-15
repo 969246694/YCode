@@ -120,11 +120,42 @@ static void testSseParsing()
 }
 
 // ------------------------------------------------------------
+static void testUrlEncode()
+{
+    CHECK(urlEncode("hello world") == "hello%20world");
+    CHECK(urlEncode("a&b=c") == "a%26b%3Dc");
+    CHECK(urlEncode("abc-_.~") == "abc-_.~");
+    CHECK(urlEncode("中文") == "%E4%B8%AD%E6%96%87");
+}
+
+// ------------------------------------------------------------
+static void testStripHtmlTags()
+{
+    CHECK(stripHtmlTags("<b>hello</b> world") == "hello world");
+    CHECK(stripHtmlTags("a &amp; b &lt; c") == "a & b < c");
+    CHECK(stripHtmlTags("plain text") == "plain text");
+    CHECK(stripHtmlTags("") == "");
+}
+
+// ------------------------------------------------------------
+static void testExtractSearch()
+{
+    std::string html = "<html><body><h3>Title</h3><p>Some <b>result</b> text</p></body></html>";
+    std::string out = extractSearchResults(html);
+    CHECK(out.find("Title") != std::string::npos);
+    CHECK(out.find("result") != std::string::npos);
+    CHECK(out.find('<') == std::string::npos); // 不应残留标签
+}
+
+// ------------------------------------------------------------
 int main()
 {
     testDangerousCommand();
     testShellMetacharacter();
     testSseParsing();
+    testUrlEncode();
+    testStripHtmlTags();
+    testExtractSearch();
 
     std::printf("\n%d checks, %d failures\n", g_ok + g_fail, g_fail);
     if (g_fail == 0)

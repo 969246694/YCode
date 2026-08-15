@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Agent 新能力
+
+- 新增 7 个工具，总数由 14 增至 **21**：
+  - `git_status` / `git_diff`：查看仓库状态与改动统计。
+  - `git_commit` / `git_push`：提交并推送（修改仓库，需用户授权，提交消息经 `-F` 文件传递避免注入）。
+  - `web_search`：联网搜索（百度，尽力提取结果）。
+  - `tasks`：任务清单维护（add / done / list，落盘 `agent_tasks.json`）。
+  - `memory`：长期记忆（save / recall，落盘 `agent_memory.json`）。
+- 系统提示词中的工具数量与列表改为**动态生成**，不再写死 14 个；启动横幅与 `/help` 同步更新。
+- 新增 `urlEncode` / `stripHtmlTags` / `extractSearchResults` 测试（合计 56 项断言）。
+
 ### 启动
 
 - `run_ycode.bat` 改为用 `reg query` 直接读注册表获取 API Key，不再调用 PowerShell（此前每次调用会加载约 4 秒的 PowerShell 配置文件，共约 8 秒），启动等待从约 8 秒降至不足 1 秒。
