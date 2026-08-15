@@ -64,6 +64,18 @@ cd YZCodex
 build.bat
 ```
 
+一键构建全部组件（agent + 引擎 + 客户端）：
+
+```bat
+build_all.bat
+```
+
+一键运行全部测试（引擎 + agent 逻辑测试）：
+
+```bat
+run_tests.bat
+```
+
 启动时客户端会自动从可执行文件位置向上查找仓库根目录。需要覆盖时可设置：
 
 ```bat
