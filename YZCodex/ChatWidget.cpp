@@ -7,6 +7,7 @@
 #include <QGraphicsOpacityEffect>
 #include <QPropertyAnimation>
 #include <QAbstractAnimation>
+#include <QEasingCurve>
 
 namespace {
 
@@ -22,6 +23,25 @@ void fadeInWidget(QWidget *widget)
     anim->setStartValue(0.0);
     anim->setEndValue(1.0);
     QObject::connect(anim, &QPropertyAnimation::finished, effect, &QObject::deleteLater);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+// 平滑滚动到底部（250ms OutCubic），避免生硬跳变
+void scrollToBottomSmooth(QScrollArea *scrollArea)
+{
+    if (!scrollArea)
+        return;
+    QScrollBar *bar = scrollArea->verticalScrollBar();
+    const int target = bar->maximum();
+    const int current = bar->value();
+    if (target <= current)
+        return;
+    QPropertyAnimation *anim = new QPropertyAnimation(bar, "value", scrollArea);
+    anim->setDuration(250);
+    anim->setStartValue(current);
+    anim->setEndValue(target);
+    anim->setEasingCurve(QEasingCurve::OutCubic);
+    QObject::connect(anim, &QPropertyAnimation::finished, anim, &QObject::deleteLater);
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
@@ -72,10 +92,8 @@ void ChatWidget::appendUserMessage(const QString &message)
     scrollLayout->addWidget(messageWidget);
     fadeInWidget(messageWidget);
 
-    // 自动滚动到底部
-    QScrollBar *scrollBar = scrollArea->verticalScrollBar();
-    QTimer::singleShot(50, [scrollBar]()
-                       { scrollBar->setValue(scrollBar->maximum()); });
+    // 平滑滚动到底部
+    scrollToBottomSmooth(scrollArea);
 }
 
 void ChatWidget::appendAssistantMessage(const QString &message)
@@ -84,10 +102,8 @@ void ChatWidget::appendAssistantMessage(const QString &message)
     scrollLayout->addWidget(messageWidget);
     fadeInWidget(messageWidget);
 
-    // 自动滚动到底部
-    QScrollBar *scrollBar = scrollArea->verticalScrollBar();
-    QTimer::singleShot(50, [scrollBar]()
-                       { scrollBar->setValue(scrollBar->maximum()); });
+    // 平滑滚动到底部
+    scrollToBottomSmooth(scrollArea);
 }
 
 void ChatWidget::beginAssistantMessage()

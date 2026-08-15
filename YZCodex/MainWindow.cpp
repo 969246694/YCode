@@ -48,7 +48,8 @@ MainWindow::MainWindow(QWidget *parent)
       previewProcess(nullptr),
       previewBuildProc(nullptr),
       previewWatcher(nullptr),
-      previewDebounceTimer(nullptr)
+      previewDebounceTimer(nullptr),
+      streamingStatusTimer(nullptr)
 {
     QString iconPath = defaultIconPath();
     if (!iconPath.isEmpty())
@@ -604,12 +605,32 @@ void MainWindow::onAssistantStreamStarted()
 {
     assistantStreaming = true;
     chatDisplay->beginAssistantMessage();
-    statusMessage->setText("Agent 正在回复...");
+
+    // 状态文字轮播：思考 -> 生成 -> 回复，避免长时间停留在单一文案
+    static const QStringList phrases = {QStringLiteral("Agent 正在思考..."),
+                                        QStringLiteral("Agent 正在生成..."),
+                                        QStringLiteral("Agent 正在回复...")};
+    if (!streamingStatusTimer)
+    {
+        streamingStatusTimer = new QTimer(this);
+        streamingStatusTimer->setInterval(600);
+    }
+    streamingStatusTimer->disconnect();
+    int index = 0;
+    QObject::connect(streamingStatusTimer, &QTimer::timeout, this,
+        [this, index]() mutable {
+            statusMessage->setText(phrases[index % phrases.size()]);
+            ++index;
+        });
+    statusMessage->setText(phrases[0]);
+    streamingStatusTimer->start();
 }
 
 void MainWindow::onAssistantStreamEnded()
 {
     assistantStreaming = false;
+    if (streamingStatusTimer)
+        streamingStatusTimer->stop();
     statusMessage->setText("就绪");
 }
 

@@ -211,6 +211,7 @@ private:
     QProcess *previewBuildProc;    // 构建进程
     QFileSystemWatcher *previewWatcher; // 监视游戏项目源码/场景
     QTimer *previewDebounceTimer;  // 文件变更防抖
+    QTimer *streamingStatusTimer;  // 流式输出时的状态文字轮播
 
     struct PanelTheme {
         QString preset = "dark";
