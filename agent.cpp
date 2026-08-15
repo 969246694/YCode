@@ -904,6 +904,28 @@ private:
         return extractSearchResults(html);
     }
 
+    // ---- 抓取网页/文本 ----
+    std::string fetchUrlTool(const std::string &url)
+    {
+        if (url.empty())
+            return "Tool Error: url 不能为空。";
+        std::string text = fetchUrlText(url);
+        if (text.empty())
+            return "fetch_url: 无法获取内容（网络受限、超时或空响应）。";
+        if (text.length() > 8000)
+            text = text.substr(0, 8000) + "\n...(截断)";
+        return text;
+    }
+
+    // ---- 结构化思考 ----
+    std::string thinkTool(const json &args)
+    {
+        std::string thought = args.value("thought", std::string(""));
+        if (thought.empty())
+            return "已记录。";
+        return "已记录你的思考。可据此继续执行。";
+    }
+
     // ---- 任务清单 ----
     std::string tasksTool(const json &args)
     {
@@ -1092,6 +1114,20 @@ private:
             }),
             json::array({"query"})));
 
+        // ---- 抓取网页/文本 ----
+        tools.push_back(makeTool("fetch_url", "抓取一个 URL 的文本内容（HTML 会被去标签；结果截断到 8000 字符）。",
+            json::object({
+                {"url", makeProp("url", "string", "要抓取的完整 URL（含 https://）")}
+            }),
+            json::array({"url"})));
+
+        // ---- 结构化思考 ----
+        tools.push_back(makeTool("think", "把当前推理/计划显式写出来再行动，帮助你在复杂任务上保持思路清晰。",
+            json::object({
+                {"thought", makeProp("thought", "string", "你的推理或计划")}
+            }),
+            json::array({"thought"})));
+
         // ---- 任务清单 ----
         tools.push_back(makeTool("tasks", "管理任务清单：action 为 add（新增，需 text）/ done（标记完成，需 index）/ list（默认）。",
             json::object({
@@ -1227,6 +1263,14 @@ private:
         if (toolName == "web_search")
         {
             return webSearchTool(args.value("query", std::string("")));
+        }
+        if (toolName == "fetch_url")
+        {
+            return fetchUrlTool(args.value("url", std::string("")));
+        }
+        if (toolName == "think")
+        {
+            return thinkTool(args);
         }
         if (toolName == "tasks")
         {
@@ -1437,7 +1481,7 @@ public:
                "YCODE_PROJECT_ROOT 是 YCode 自身源码根目录；YCODE_WORKSPACE_ROOT 是用户游戏项目目录。\n" +
                workspaceInfo + "\n" +
                "修改代码前先读取原文件，用write_file写入完整内容。用中文回答，自信幽默。\n" +
-               "增强能力：git_status/git_diff 查看仓库状态；git_commit/git_push 提交并推送（会修改仓库，需用户授权）；web_search 联网搜索；tasks 维护任务清单；memory 保存/读取长期记忆。\n" +
+               "增强能力：git_status/git_diff 查看仓库状态；git_commit/git_push 提交并推送（会修改仓库，需用户授权）；web_search 联网搜索；fetch_url 抓取网页文本；think 显式思考；tasks 维护任务清单；memory 保存/读取长期记忆。\n" +
                "凡是修改了 YCode 自身文件，改完后必须调用 apply_self_changes；它会根据路径自动选择热加载、重建或重启。\n" +
                "只有用户明确要求立即重启 Agent 时才直接调用 restart_agent；不要在改完源码后只回复完成。\n" +
                "安全护栏：execute_command 执行删除/格式化/注册表/环境变量/关机等危险命令，delete_file 删除文件/目录，git_commit/git_push 修改仓库时，会被拦截并要求用户授权。被拦截时不要擅自重复尝试，应明确告知用户将要执行的操作，并请用户在聊天中发送 /allow-dangerous 授权（/deny-dangerous 可撤销授权）。";
@@ -1523,7 +1567,7 @@ int main(int argc, char *argv[])
 
     DeepSeekAgent agent(apiKey, projectDir);
     std::string input;
-    std::vector<json> conversationHistory;
+    std::vector<json> conversationHistory = agent.loadSession(); // 自动恢复上次会话
 
     // 托管模式下由 Qt 客户端负责展示用户/助手角色，跳过 REPL 提示符
     const char *managedEnv = std::getenv("YCODE_MANAGED");
