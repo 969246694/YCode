@@ -112,10 +112,76 @@ void ChatWidget::beginAssistantMessage()
     lastAssistantLabel = nullptr;
 }
 
+void ChatWidget::startTypingIndicator()
+{
+    stopTypingIndicator(); // 幂等：先清理旧的指示器
+    typingDotCount = 0;
+
+    typingWidget = new QWidget();
+    typingWidget->setStyleSheet("QWidget { background: transparent; }");
+    QHBoxLayout *layout = new QHBoxLayout(typingWidget);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(10);
+
+    QLabel *avatar = new QLabel("🤖");
+    avatar->setProperty("messageRole", "assistantAvatar");
+    avatar->setFixedSize(28, 28);
+    avatar->setAlignment(Qt::AlignCenter);
+    styleAvatarLabel(avatar, false);
+
+    typingLabel = new QLabel("Agent 正在思考");
+    typingLabel->setProperty("messageRole", "typingIndicator");
+    typingLabel->setMaximumWidth(400);
+    typingLabel->setStyleSheet(QString(
+        "QLabel {"
+        "    background-color: %1;"
+        "    color: %2;"
+        "    padding: 10px 14px;"
+        "    border-radius: 8px;"
+        "    font-size: 13px;"
+        "    border: 1px solid %3;"
+        "}")
+        .arg(surfaceBackground, mutedTextColor, borderColor));
+
+    layout->addWidget(avatar);
+    layout->addWidget(typingLabel);
+    layout->addStretch();
+
+    scrollLayout->addWidget(typingWidget);
+    scrollToBottomSmooth(scrollArea);
+
+    typingTimer = new QTimer(this);
+    typingTimer->setInterval(400);
+    QObject::connect(typingTimer, &QTimer::timeout, this, [this]() {
+        typingDotCount = (typingDotCount + 1) % 4;
+        typingLabel->setText(QStringLiteral("Agent 正在思考") + QString(typingDotCount, QLatin1Char('.')));
+    });
+    typingTimer->start();
+}
+
+void ChatWidget::stopTypingIndicator()
+{
+    if (typingTimer)
+    {
+        typingTimer->stop();
+        typingTimer->deleteLater();
+        typingTimer = nullptr;
+    }
+    if (typingWidget)
+    {
+        scrollLayout->removeWidget(typingWidget);
+        typingWidget->deleteLater();
+        typingWidget = nullptr;
+    }
+    typingLabel = nullptr;
+}
+
 void ChatWidget::appendToLastAssistant(const QString &delta)
 {
     if (!lastAssistantLabel)
     {
+        // 首段内容到达：移除“正在思考…”指示器，再创建正式气泡
+        stopTypingIndicator();
         appendAssistantMessage(delta);
         return;
     }
@@ -128,6 +194,7 @@ void ChatWidget::appendToLastAssistant(const QString &delta)
 
 void ChatWidget::clear()
 {
+    stopTypingIndicator();
     QLayoutItem *item;
     while ((item = scrollLayout->takeAt(0)) != nullptr)
     {
@@ -208,6 +275,7 @@ void ChatWidget::styleAvatarLabel(QLabel *label, bool isUser) const
 
 void ChatWidget::styleMessageLabel(QLabel *label, bool isUser) const
 {
+    label->setAttribute(Qt::WA_Hover, true); // 启用 QSS :hover 伪状态
     label->setStyleSheet(QString(
         "QLabel {"
         "    background-color: %1;"
@@ -217,10 +285,16 @@ void ChatWidget::styleMessageLabel(QLabel *label, bool isUser) const
         "    font-size: 13px;"
         "    line-height: 1.5;"
         "    border: 1px solid %3;"
+        "}"
+        "QLabel:hover {"
+        "    border: 1px solid %4;"
+        "    background-color: %5;"
         "}")
         .arg(isUser ? accentColor : surfaceBackground,
              isUser ? "#FFFFFF" : textColor,
-             isUser ? accentColor : borderColor));
+             isUser ? accentColor : borderColor,
+             isUser ? "#3399FF" : accentColor,
+             isUser ? accentColor : QString("#323238")));
 }
 
 void ChatWidget::styleTimeLabel(QLabel *label) const

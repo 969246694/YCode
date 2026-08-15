@@ -605,6 +605,7 @@ void MainWindow::onAssistantStreamStarted()
 {
     assistantStreaming = true;
     chatDisplay->beginAssistantMessage();
+    chatDisplay->startTypingIndicator();
 
     // 状态文字轮播：思考 -> 生成 -> 回复，避免长时间停留在单一文案
     static const QStringList phrases = {QStringLiteral("Agent 正在思考..."),
@@ -629,6 +630,7 @@ void MainWindow::onAssistantStreamStarted()
 void MainWindow::onAssistantStreamEnded()
 {
     assistantStreaming = false;
+    chatDisplay->stopTypingIndicator();
     if (streamingStatusTimer)
         streamingStatusTimer->stop();
     statusMessage->setText("就绪");

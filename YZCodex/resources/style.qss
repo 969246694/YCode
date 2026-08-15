@@ -212,7 +212,8 @@ QPushButton:disabled {
 }
 
 QStatusBar {
-    background-color: #007acc;
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                      stop: 0 #007acc, stop: 1 #005a9e);
     color: white;
     border-top: 1px solid #005a9e;
 }
@@ -223,23 +224,51 @@ QScrollBar:vertical {
     border-radius: 6px;
 }
 
+QScrollBar:horizontal {
+    background-color: #2d2d30;
+    height: 12px;
+    border-radius: 6px;
+}
+
 QScrollBar::handle:vertical {
     background-color: #3e3e42;
     border-radius: 6px;
     min-height: 20px;
 }
 
+QScrollBar::handle:horizontal {
+    background-color: #3e3e42;
+    border-radius: 6px;
+    min-width: 20px;
+}
+
 QScrollBar::handle:vertical:hover {
     background-color: #5c5c5c;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+QScrollBar::handle:horizontal:hover {
+    background-color: #5c5c5c;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     border: none;
+    background: none;
+    width: 0px;
+    height: 0px;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
     background: none;
 }
 
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical,
+QScrollBar::left-arrow:horizontal, QScrollBar::right-arrow:horizontal {
     background: none;
+    border: none;
+    width: 0px;
+    height: 0px;
 }
 
 QSplitter::handle {

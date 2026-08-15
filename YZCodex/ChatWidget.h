@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QFrame>
 #include <QString>
+#include <QTimer>
 
 class ChatWidget : public QWidget
 {
@@ -20,6 +21,8 @@ public:
     void appendAssistantMessage(const QString &message);
     void beginAssistantMessage();          // 标记新一轮助手回复开始（后续内容追加到新气泡）
     void appendToLastAssistant(const QString &delta); // 流式追加到当前助手气泡
+    void startTypingIndicator();           // 流式回复期间显示“正在思考…”动画
+    void stopTypingIndicator();            // 结束/移除正在思考指示器
     void clear();
     void applyTheme(const QString &panelBackground,
                     const QString &surfaceBackground,
@@ -47,6 +50,10 @@ private:
     QString accentColor;
     QString assistantAccentColor;
     QLabel *lastAssistantLabel = nullptr; // 最近一个助手消息的文本标签
+    QWidget *typingWidget = nullptr;      // “正在思考…”指示器容器
+    QLabel *typingLabel = nullptr;        // “正在思考…”文字
+    QTimer *typingTimer = nullptr;        // 圆点动画定时器
+    int typingDotCount = 0;               // 当前圆点数量（0..3）
 };
 
 #endif
