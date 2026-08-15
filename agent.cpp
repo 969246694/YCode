@@ -344,6 +344,8 @@ size_t StreamWriteCallback(void *ptr, size_t size, size_t nmemb, void *userdata)
                 for (const auto &tc : delta["tool_calls"])
                 {
                     int index = tc.value("index", 0);
+                    if (index < 0 || index > 512)
+                        continue; // 防御畸形 index，避免 resize 抛异常
                     if (index >= static_cast<int>(ctx->toolCallAcc.size()))
                         ctx->toolCallAcc.resize(index + 1);
                     ToolCallAcc &acc = ctx->toolCallAcc[index];
@@ -360,7 +362,7 @@ size_t StreamWriteCallback(void *ptr, size_t size, size_t nmemb, void *userdata)
                 }
             }
         }
-        catch (const json::exception &) { /* 忽略无法解析的行 */ }
+        catch (...) { /* 忽略任何异常，避免异常逃逸出 curl 的 C 回调导致进程崩溃 */ }
     }
     return total;
 }
@@ -426,7 +428,14 @@ static size_t StringWriteCallback(void *ptr, size_t size, size_t nmemb, void *us
 {
     std::string *out = static_cast<std::string *>(userdata);
     size_t total = size * nmemb;
-    out->append(static_cast<const char *>(ptr), total);
+    try
+    {
+        out->append(static_cast<const char *>(ptr), total);
+    }
+    catch (...)
+    {
+        return 0; // 通知 curl 传输失败，避免异常逃逸出 C 回调
+    }
     return total;
 }
 
@@ -1251,6 +1260,8 @@ public:
 
     std::string chat(const std::string &userMessage, std::vector<json> &conversationHistory)
     {
+        try
+        {
         if (!userMessage.empty())
             conversationHistory.push_back({{"role", "user"}, {"content", userMessage}});
 
@@ -1306,9 +1317,13 @@ public:
                         json toolArgs = json::parse(argsStr);
                         toolResult = executeTool(toolName, toolArgs);
                     }
-                    catch (const json::exception &e)
+                    catch (const std::exception &e)
                     {
-                        toolResult = "Tool Error: 工具参数解析失败 - " + std::string(e.what());
+                        toolResult = "Tool Error: " + std::string(e.what());
+                    }
+                    catch (...)
+                    {
+                        toolResult = "Tool Error: 未知异常";
                     }
 
                     conversationHistory.push_back({{"role", "tool"},
@@ -1326,6 +1341,15 @@ public:
             return "";
         }
         return "达到最大工具调用次数限制";
+        }
+        catch (const std::exception &e)
+        {
+            return "Agent Error: " + std::string(e.what());
+        }
+        catch (...)
+        {
+            return "Agent Error: 未知异常";
+        }
     }
 
     std::string getSystemPrompt()
