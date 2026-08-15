@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/969246694/YCode/actions/workflows/ci.yml/badge.svg)](https://github.com/969246694/YCode/actions/workflows/ci.yml)
 
+> 架构说明见 [docs/architecture.md](docs/architecture.md)。
+
 YCode 是一个 Windows 桌面 AI 编程助手项目，包含：
 
 - `agent.cpp`: 基于 DeepSeek API 的本地命令行 Agent（23 个工具：文件/命令/搜索/Git/联网/任务/记忆/自更新，流式输出，会话自动恢复）。
