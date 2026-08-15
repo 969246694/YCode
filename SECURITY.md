@@ -6,6 +6,8 @@ YCode 是一个本地运行的 AI 编程助手，其 Agent 拥有读写文件、
 
 - **TLS 证书校验**：Agent 调用 DeepSeek API 与下载文件均启用 `CURLOPT_SSL_VERIFYPEER`，防止中间人攻击。
 - **危险命令拦截**：`execute_command` 会拦截删除 / 格式化 / 注册表 / 环境变量 / 关机等命令；`delete_file` 执行前需授权。
+- **Git 操作授权**：`git_commit`（提交）与 `git_push`（推送）会修改仓库状态，同样需要授权。
+- **命令超时**：`execute_command` 超过 10 分钟会被终止整个进程树，子进程 stdin 指向 NUL（交互命令不会读走 Agent 输入）。
 - **授权机制**：独立模式（终端）交互输入 `y/n`；托管模式（YCode 客户端）在聊天中发送 `/allow-dangerous` 授权、`/deny-dangerous` 撤销。
 - **命令注入防护**：`search_files` / `search_content` / `list_directory` / `delete_file` 会拒绝含 shell 元字符（`" & | ; < > ^ % !` 等）的参数。
 - **防止静默覆盖**：`download_file` 拒绝覆盖已存在的文件。
