@@ -61,13 +61,14 @@
 - 清理 `SceneLoader` 对 `physics2D` 对象的冗余碰撞体解析，仅从 `box`/`collider` 子对象读取。
 - 引擎统一添加 `/utf-8` 编译选项（MSVC），避免中文注释在 GBK 代码页下被误读。
 - 新增圆形碰撞体 `CircleCollider2D`：`SceneLoader` 支持 `"circle": { "radiusMeters": ... }`，`PhysicsWorld2D::attachCircle` 挂接 Box2D 圆形刚体。
+- 新增胶囊碰撞体 `CapsuleCollider2D`：`SceneLoader` 支持 `"capsule": { "center1": [...], "center2": [...], "radiusMeters": ... }`（优先级 capsule > circle > box），`PhysicsWorld2D::attachCapsule` 挂接 Box2D 胶囊刚体。
 
 ### 测试与 CI
 
-- 新增 `YCodeEngine/tests/engine_tests.cpp`：覆盖 EventBus（含重入退订）、Scene、SceneLoader、ResourceManager、PhysicsWorld2D（含重力下落）、Engine 生命周期与文件读写路径。
-- 新增 `tests/agent_logic_tests.cpp`：覆盖危险命令识别、shell 元字符防护与 SSE 流式解析（45 项断言，Windows 本地运行，需 vcpkg libcurl）。
+- 新增 `YCodeEngine/tests/engine_tests.cpp`：覆盖 EventBus（含重入退订）、Scene、SceneLoader、ResourceManager、PhysicsWorld2D（含重力下落、盒/圆/胶囊碰撞体）、Engine 生命周期与文件读写路径。
+- 新增 `tests/agent_logic_tests.cpp`：覆盖危险命令识别、shell 元字符防护、SSE 流式解析、URL 编码与 HTML 解析（56 项断言，Windows 本地运行，需 vcpkg libcurl）。
 - `YCodeEngine/CMakeLists.txt` 接入 CTest，`ctest` 一键运行全部单元测试。
-- 新增 `.github/workflows/ci.yml`：每次 push / pull request 自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行测试；并在 Windows 上构建 `agent.exe` 与运行 agent 逻辑测试。
+- 新增 `.github/workflows/ci.yml`：每次 push / pull request 自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行测试；在 Windows 上构建 `agent.exe` 与运行 agent 逻辑测试；用 `install-qt-action` 装 Qt 6.8 后构建 YZCodex Qt 客户端。
 
 ### 文档
 

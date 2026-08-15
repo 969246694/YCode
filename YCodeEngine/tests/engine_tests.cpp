@@ -188,13 +188,21 @@ static void testSceneLoader()
             "bodyType": "kinematic",
             "circle": { "radiusMeters": 0.3, "friction": 0.1 }
           }
+        },
+        {
+          "name": "Hero",
+          "transform": { "position": [8, 15] },
+          "physics2D": {
+            "bodyType": "dynamic",
+            "capsule": { "center1": [0, -0.5], "center2": [0, 0.5], "radiusMeters": 0.2 }
+          }
         }
       ]
     })";
 
     CHECK(ycode::SceneLoader::loadFromText(json, scene, &err));
     CHECK_EQ(scene.name(), std::string("Loaded"));
-    CHECK_EQ(scene.entityCount(), std::size_t(3));
+    CHECK_EQ(scene.entityCount(), std::size_t(4));
 
     ycode::Entity* player = scene.findEntityByName("Player");
     if (player)
@@ -233,6 +241,16 @@ static void testSceneLoader()
         CHECK(coin->physics2D.bodyType == ycode::BodyType2D::Kinematic);
         CHECK_NEAR(coin->physics2D.circle.radiusMeters, 0.3f, 1e-5f);
         CHECK_NEAR(coin->physics2D.circle.friction, 0.1f, 1e-5f);
+    }
+
+    ycode::Entity* hero = scene.findEntityByName("Hero");
+    if (hero)
+    {
+        CHECK(hero->physics2D.useCapsule);
+        CHECK(hero->physics2D.bodyType == ycode::BodyType2D::Dynamic);
+        CHECK_NEAR(hero->physics2D.capsule.radiusMeters, 0.2f, 1e-5f);
+        CHECK_NEAR(hero->physics2D.capsule.center1.y, -0.5f, 1e-5f);
+        CHECK_NEAR(hero->physics2D.capsule.center2.y, 0.5f, 1e-5f);
     }
 
     // 错误路径
@@ -339,6 +357,29 @@ static void testPhysics()
     ycode::CircleCollider2D badCircle;
     badCircle.radiusMeters = 0.0f;
     CHECK(!physics.attachCircle(scene, ball.id, ycode::BodyType2D::Dynamic, badCircle, &err));
+
+    physics.clear();
+    CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    // 胶囊碰撞体
+    ycode::Entity& cap = scene.createEntity("CapsuleBody");
+    cap.transform.position = ycode::Vec2{200.0f, 0.0f};
+    ycode::CapsuleCollider2D capsule;
+    capsule.radiusMeters = 0.2f;
+    capsule.center1 = ycode::Vec2{0.0f, -0.4f};
+    capsule.center2 = ycode::Vec2{0.0f, 0.4f};
+    CHECK(physics.attachCapsule(scene, cap.id, ycode::BodyType2D::Dynamic, capsule, &err));
+    CHECK(physics.hasBody(cap.id));
+    CHECK_EQ(physics.bodyCount(), std::size_t(1));
+
+    CHECK(physics.detach(cap.id));
+    CHECK(!physics.hasBody(cap.id));
+    CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    // 无效半径
+    ycode::CapsuleCollider2D badCapsule;
+    badCapsule.radiusMeters = 0.0f;
+    CHECK(!physics.attachCapsule(scene, cap.id, ycode::BodyType2D::Dynamic, badCapsule, &err));
 
     physics.clear();
     CHECK_EQ(physics.bodyCount(), std::size_t(0));

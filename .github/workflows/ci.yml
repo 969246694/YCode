@@ -24,7 +24,7 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
-  # agent.exe 依赖 vcpkg 提供的 libcurl；Qt 客户端依赖 Qt6，暂未纳入 CI。
+  # agent.exe 依赖 vcpkg 提供的 libcurl。
   agent:
     name: Agent (Windows)
     runs-on: windows-latest
@@ -54,3 +54,24 @@ jobs:
       - name: Run agent logic tests
         shell: cmd
         run: agent_tests.exe
+
+  # Qt 客户端：用 jurplel/install-qt-action 装 Qt 6.8 后 CMake 构建。
+  client:
+    name: YZCodex (Qt client, Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          arch: 'win64_msvc2022_64'
+
+      - name: Configure
+        shell: cmd
+        run: cmake -S YZCodex -B build -A x64 -DCMAKE_PREFIX_PATH=%Qt6_DIR%
+
+      - name: Build
+        shell: cmd
+        run: cmake --build build --config Release

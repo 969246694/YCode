@@ -42,6 +42,11 @@ public:
                       BodyType2D bodyType,
                       CircleCollider2D collider = {},
                       std::string* error = nullptr);
+    bool attachCapsule(Scene& scene,
+                       EntityId entityId,
+                       BodyType2D bodyType,
+                       CapsuleCollider2D collider = {},
+                       std::string* error = nullptr);
     bool attachSceneBodies(Scene& scene, std::string* error = nullptr);
     bool detach(EntityId entityId);
     bool hasBody(EntityId entityId) const;

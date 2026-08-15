@@ -46,12 +46,24 @@ struct CircleCollider2D {
     bool fixedRotation = false;
 };
 
+struct CapsuleCollider2D {
+    Vec2 center1{0.0f, 0.0f};  // 线段端点（局部坐标，米）
+    Vec2 center2{0.0f, 1.0f};
+    float radiusMeters = 0.25f;
+    float density = 1.0f;
+    float friction = 0.3f;
+    float restitution = 0.0f;
+    bool fixedRotation = false;
+};
+
 struct PhysicsBody2D {
     bool enabled = false;
     BodyType2D bodyType = BodyType2D::Dynamic;
     BoxCollider2D box;
     CircleCollider2D circle;
-    bool useCircle = false; // true 时挂圆形碰撞体，否则挂盒形
+    CapsuleCollider2D capsule;
+    bool useCircle = false;    // true 时挂圆形碰撞体
+    bool useCapsule = false;   // true 时挂胶囊碰撞体（优先于圆形与盒形）
 };
 
 struct Entity {

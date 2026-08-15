@@ -167,6 +167,17 @@ bool applyCircleColliderFields(const Json& object, CircleCollider2D& circle, std
            readBoolField(object, "fixedRotation", circle.fixedRotation, error);
 }
 
+bool applyCapsuleColliderFields(const Json& object, CapsuleCollider2D& capsule, std::string* error)
+{
+    return readVec2Field(object, "center1", capsule.center1, error) &&
+           readVec2Field(object, "center2", capsule.center2, error) &&
+           readNumberField(object, "radiusMeters", capsule.radiusMeters, error) &&
+           readNumberField(object, "density", capsule.density, error) &&
+           readNumberField(object, "friction", capsule.friction, error) &&
+           readNumberField(object, "restitution", capsule.restitution, error) &&
+           readBoolField(object, "fixedRotation", capsule.fixedRotation, error);
+}
+
 bool applyPhysics2D(const Json& entityObject, Entity& entity, std::string* error)
 {
     const Json* physics = findField(entityObject, "physics2D");
@@ -223,6 +234,22 @@ bool applyPhysics2D(const Json& entityObject, Entity& entity, std::string* error
         if (!applyCircleColliderFields(*circle, physicsBody.circle, error))
             return false;
         physicsBody.useCircle = true;
+    }
+
+    // 胶囊碰撞体（优先级最高：capsule > circle > box）
+    const Json* capsule = findField(*physics, "capsule");
+    if (capsule)
+    {
+        if (!capsule->is_object())
+        {
+            if (error)
+                *error = "Expected 'capsule' to be an object";
+            return false;
+        }
+
+        if (!applyCapsuleColliderFields(*capsule, physicsBody.capsule, error))
+            return false;
+        physicsBody.useCapsule = true;
     }
 
     entity.physics2D = physicsBody;

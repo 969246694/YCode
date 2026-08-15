@@ -95,3 +95,20 @@ Circle colliders are supported via the `circle` field (mutually exclusive with `
   }
 }
 ```
+
+Capsule colliders (common for characters / bullets) use the `capsule` field (priority: capsule > circle > box):
+
+```json
+{
+  "name": "Hero",
+  "transform": { "position": [8.0, 15.0] },
+  "physics2D": {
+    "bodyType": "dynamic",
+    "capsule": {
+      "center1": [0.0, -0.5],
+      "center2": [0.0, 0.5],
+      "radiusMeters": 0.2
+    }
+  }
+}
+```
