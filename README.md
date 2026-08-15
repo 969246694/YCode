@@ -1,10 +1,12 @@
 # YCode
 
+[![CI](https://github.com/969246694/YCode/actions/workflows/ci.yml/badge.svg)](https://github.com/969246694/YCode/actions/workflows/ci.yml)
+
 YCode 是一个 Windows 桌面 AI 编程助手项目，包含：
 
-- `agent.cpp`: 基于 DeepSeek API 的本地命令行 Agent。
-- `YZCodex/`: 使用 Qt 6 和 C++17 编写的图形客户端。
-- `YCodeEngine/`: YCode 内置 C++17 游戏引擎内核，提供场景、2D 物理、窗口绘制、事件总线、插件 ABI、插件加载器和游戏项目模板。
+- `agent.cpp`: 基于 DeepSeek API 的本地命令行 Agent（23 个工具：文件/命令/搜索/Git/联网/任务/记忆/自更新，流式输出，会话自动恢复）。
+- `YZCodex/`: 使用 Qt 6 和 C++17 编写的图形客户端（编辑器、文件树、终端、聊天、游戏开发工作区、实时预览）。
+- `YCodeEngine/`: YCode 内置 C++17 游戏引擎内核，提供场景、2D 物理（盒/圆/胶囊碰撞、接触与命中事件、射线检测）、贴图绘制、音频、窗口绘制、事件总线、插件 ABI、插件加载器和游戏项目模板。
 - `build.bat`、`run_ycode.bat`、`manage_api_key.ps1`: Windows 下的构建、启动和 API Key 管理脚本。
 
 ## 依赖
@@ -74,7 +76,7 @@ cl /EHsc /utf-8 tests\agent_logic_tests.cpp /I YCodeEngine\third_party /I %VCPKG
 agent_tests.exe
 ```
 
-GitHub Actions 会在每次 push / pull request 时自动在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行这些测试；同时会在 Windows 上构建 `agent.exe` 并运行 agent 逻辑测试（见 `.github/workflows/ci.yml`）。
+GitHub Actions 会在每次 push / pull request 时自动：在 Ubuntu 与 Windows 上构建 YCodeEngine 并运行测试；在 Windows 上构建 `agent.exe` 并运行 agent 逻辑测试；安装 Qt 6.8 后构建 YZCodex Qt 客户端（见 `.github/workflows/ci.yml`）。
 
 ## 配置
 
@@ -127,6 +129,7 @@ Qt 客户端菜单 `游戏开发` 提供：
 - 打开 YCode 游戏项目：把文件树和终端切换到独立游戏工作区。
 - 构建当前游戏项目：运行 CMake configure/build。
 - 运行当前游戏项目：启动已构建的游戏可执行文件。
+- **实时预览**：一键构建并运行游戏，修改 `src/`、`scenes/` 或 `CMakeLists.txt` 后自动重建并重启（热重载循环）。
 - 构建 YCode Engine：在底部终端面板运行 `YCodeEngine/build.bat`。
 - 打开引擎源码目录：进入内置引擎内核源码。
 - 启动 AI 游戏开发模式：把 Agent 切换到围绕 YCodeEngine 的游戏开发上下文。
@@ -140,13 +143,14 @@ YCode 内部区分三个路径：
 `YCodeEngine` 当前包含：
 
 - `EventBus`: 发布/订阅事件总线。
-- `Scene` / `Entity` / `Transform2D`: 轻量场景和游戏对象基础层。
-- `PhysicsWorld2D` / `BoxCollider2D`: 基于 Box2D 的 2D 刚体物理封装。
-- `ResourceManager` / `SceneLoader`: 读取项目资源，并从 JSON 场景文件生成实体与 `physics2D` 刚体声明。
+- `Scene` / `Entity` / `Transform2D`: 轻量场景和游戏对象基础层，支持按属性检索实体（`findEntitiesByProperty`）。
+- `PhysicsWorld2D` / `BoxCollider2D` / `CircleCollider2D` / `CapsuleCollider2D`: 基于 Box2D 的 2D 刚体物理封装，支持盒/圆/胶囊碰撞体、接触与命中事件回调、射线检测。
+- `ResourceManager` / `SceneLoader`: 读取项目资源，并从 JSON 场景文件生成实体与 `physics2D` 刚体声明（`box` / `circle` / `capsule`）。
+- `Texture2D` / `AudioPlayer`: 贴图加载绘制（GDI+，PNG/BMP/JPG）与 WAV 音频播放（可循环）。
 - `PluginLoader`: 跨平台动态插件加载器。
 - `plugin.h`: 稳定 C ABI 插件接口。
 - `Engine`: 初始化、tick、shutdown 生命周期。
-- `Window` / `Key` / `Canvas2D`: 最小窗口、键盘输入和 2D 矩形绘制封装；Windows 下由 Win32/GDI 实现。
+- `Window` / `Key` / `Canvas2D`: 最小窗口、键盘输入和 2D 绘制封装（矩形与贴图）；Windows 下由 Win32/GDI 实现。
 
 ## 自更新
 
