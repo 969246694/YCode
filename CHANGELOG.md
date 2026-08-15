@@ -56,12 +56,13 @@
 - 修复关闭窗口时多标签页场景下保存错文件的问题：`closeEvent` 现在对每个已修改的标签页直接调用 `saveEditorToFile` 保存，而非误存当前标签页；「另存为」被取消时会中止关闭，避免误丢改动。
 - 将约 2800 行的 `MainWindow.cpp` 按职责拆分为 4 个文件：`MainWindow.cpp`（核心逻辑与回调）、`MainWindowUi.cpp`（界面搭建）、`MainWindowTheme.cpp`（主题与配色）、`MainWindowGame.cpp`（游戏开发），纯重构、行为不变。
 - 新增游戏「实时预览」：`游戏开发 → 实时预览` 一键构建并运行游戏；用 `QFileSystemWatcher` 监视游戏项目 `src/`、`scenes/` 与 `CMakeLists.txt`，保存文件后防抖自动重建并重启游戏（热重载循环）。
+- 升级「新建 YCode 游戏项目」模板为挡板接球 demo：圆形碰撞体 + 接触事件（球撞挡板/地面打印）+ 键盘控制挡板；并修复模板 CMake 的两个问题（`add_subdirectory` 内 `project()` 重置 C++ 标准、缺 `/utf-8`），已用真实构建验证模板可编译。
 
 ### YCodeEngine
 
 - `EventBus::publish` 派发前拷贝订阅快照，处理函数在派发过程中订阅/退订不再导致迭代器失效。
 - 清理 `SceneLoader` 对 `physics2D` 对象的冗余碰撞体解析，仅从 `box`/`collider` 子对象读取。
-- 引擎统一添加 `/utf-8` 编译选项（MSVC），避免中文注释在 GBK 代码页下被误读。
+- 引擎统一添加 `/utf-8` 编译选项（MSVC），避免中文注释在 GBK 代码页下被误读；并作为 `PUBLIC` 选项传播给链接引擎的游戏项目。
 - 新增圆形碰撞体 `CircleCollider2D`：`SceneLoader` 支持 `"circle": { "radiusMeters": ... }`，`PhysicsWorld2D::attachCircle` 挂接 Box2D 圆形刚体。
 - 新增胶囊碰撞体 `CapsuleCollider2D`：`SceneLoader` 支持 `"capsule": { "center1": [...], "center2": [...], "radiusMeters": ... }`（优先级 capsule > circle > box），`PhysicsWorld2D::attachCapsule` 挂接 Box2D 胶囊刚体。
 - 新增碰撞接触事件与命中事件：`PhysicsWorld2D::setContactHandler`（接触开始/结束）与 `setHitHandler`（碰撞点/法线/接近速度，球撞砖必备）；修复 Box2D 3.x 形状默认关闭事件的问题（`enableContactEvents`/`enableHitEvents` 现已在 attach 时开启）。

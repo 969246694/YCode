@@ -84,47 +84,40 @@ add_executable(%1
 )
 
 target_link_libraries(%1 PRIVATE ycode_engine)
+# add_subdirectory 内的 project() 会重置外层 C++ 标准，这里显式指定
+target_compile_features(%1 PRIVATE cxx_std_17)
 )").arg(safeName, enginePath);
 
     QString mainCpp = QString(
 R"(#include <ycode/core.h>
 
 #include <chrono>
+#include <cmath>
 #include <iostream>
 #include <thread>
 
 namespace {
 
-void drawBox(ycode::Canvas2D& canvas,
-             const ycode::Entity& entity,
-             int width,
-             int height,
-             float boxWidth,
-             float boxHeight,
-             ycode::Color fill)
+void drawBox(ycode::Canvas2D& canvas, const ycode::Entity& entity, int width, int height,
+             float boxWidth, float boxHeight, ycode::Color fill)
 {
     float centerX = static_cast<float>(width) * 0.5f + entity.transform.position.x;
     float centerY = static_cast<float>(height) * 0.5f - entity.transform.position.y;
-    float left = centerX - boxWidth * 0.5f;
-    float top = centerY - boxHeight * 0.5f;
-
-    canvas.fillRect(left, top, boxWidth, boxHeight, fill);
-    canvas.strokeRect(left, top, boxWidth, boxHeight, ycode::Color{235, 245, 255, 255}, 2);
+    canvas.fillRect(centerX - boxWidth * 0.5f, centerY - boxHeight * 0.5f, boxWidth, boxHeight, fill);
 }
 
-void drawScene(ycode::Engine& engine, ycode::EntityId playerId, ycode::EntityId groundId, void* nativeDc, int width, int height)
+void drawCircle(ycode::Canvas2D& canvas, const ycode::Entity& entity, int width, int height,
+                float radius, ycode::Color fill)
 {
-    ycode::Canvas2D canvas(nativeDc, width, height);
-
-    if (auto* ground = engine.scene().findEntity(groundId))
-        drawBox(canvas, *ground, width, height, 768.0f, 32.0f, ycode::Color{72, 92, 112, 255});
-
-    if (auto* player = engine.scene().findEntity(playerId))
+    float centerX = static_cast<float>(width) * 0.5f + entity.transform.position.x;
+    float centerY = static_cast<float>(height) * 0.5f - entity.transform.position.y;
+    const int segments = 24;
+    for (int i = 0; i < segments; ++i)
     {
-        float size = 48.0f * player->transform.scale.x;
-        if (size < 16.0f)
-            size = 16.0f;
-        drawBox(canvas, *player, width, height, size, size, ycode::Color{54, 162, 235, 255});
+        float angle = static_cast<float>(i) * 6.2831853f / static_cast<float>(segments);
+        float x = centerX + std::cos(angle) * radius;
+        float y = centerY + std::sin(angle) * radius;
+        canvas.fillRect(x - 3.0f, y - 3.0f, 6.0f, 6.0f, fill);
     }
 }
 
@@ -142,12 +135,6 @@ int main()
     config.window.height = 720;
 
     ycode::Engine engine(config);
-    engine.events().subscribe("*", [](const ycode::Event& event) {
-        if (event.type == "engine.tick")
-            return;
-        std::cout << "[event] " << event.type << std::endl;
-    });
-
     std::string error;
     if (!engine.initialize(&error))
     {
@@ -155,52 +142,57 @@ int main()
         return 1;
     }
 
-    auto* player = engine.scene().findEntityByName("Player");
-    if (!player)
-    {
-        std::cerr << "Startup scene does not contain 'Player'" << std::endl;
-        return 1;
-    }
-
-    ycode::EntityId playerId = player->id;
+    auto* ball = engine.scene().findEntityByName("Ball");
+    auto* paddle = engine.scene().findEntityByName("Paddle");
     auto* ground = engine.scene().findEntityByName("Ground");
-    if (!ground)
+    if (!ball || !paddle || !ground)
     {
-        std::cerr << "Startup scene does not contain 'Ground'" << std::endl;
+        std::cerr << "Startup scene is missing Ball/Paddle/Ground" << std::endl;
         return 1;
     }
 
+    ycode::EntityId ballId = ball->id;
+    ycode::EntityId paddleId = paddle->id;
     ycode::EntityId groundId = ground->id;
-    if (!engine.physics().hasBody(playerId) || !engine.physics().hasBody(groundId))
-    {
-        std::cerr << "Startup scene is missing physics2D bodies" << std::endl;
-        return 1;
-    }
 
-    engine.scene().setUpdateHandler([&engine, playerId](ycode::Scene& scene, float deltaSeconds) {
-        auto* entity = scene.findEntity(playerId);
+    // 给球一个初始速度，让它飞起来
+    engine.physics().setLinearVelocity(ballId, ycode::Vec2{2.0f, 6.0f});
+
+    // 接触事件：球碰到挡板/地面时打印（打砖块/挡球游戏的记分钩子）
+    engine.physics().setContactHandler([&](ycode::EntityId a, ycode::EntityId b, bool begin) {
+        if (!begin)
+            return;
+        if (a == paddleId || b == paddleId)
+            std::cout << "[接触] 球碰到挡板！" << std::endl;
+        else if (a == groundId || b == groundId)
+            std::cout << "[接触] 球落地了。" << std::endl;
+    });
+
+    // 键盘控制挡板（Kinematic 刚体：直接改 transform 即可驱动）
+    engine.scene().setUpdateHandler([&engine, paddleId](ycode::Scene& scene, float) {
+        auto* entity = scene.findEntity(paddleId);
         if (!entity || !entity->active)
             return;
-
         float horizontal = 0.0f;
-        float vertical = 0.0f;
         if (engine.window().isKeyDown(ycode::Key::Left) || engine.window().isKeyDown(ycode::Key::A))
             horizontal -= 1.0f;
         if (engine.window().isKeyDown(ycode::Key::Right) || engine.window().isKeyDown(ycode::Key::D))
             horizontal += 1.0f;
-        if (engine.window().isKeyDown(ycode::Key::Down) || engine.window().isKeyDown(ycode::Key::S))
-            vertical -= 1.0f;
-        if (engine.window().isKeyDown(ycode::Key::Up) || engine.window().isKeyDown(ycode::Key::W))
-            vertical += 1.0f;
-
-        ycode::Vec2 velocity = engine.physics().linearVelocity(playerId);
-        velocity.x = horizontal * 4.0f;
-        if (vertical != 0.0f)
-            velocity.y = vertical * 4.0f;
-        engine.physics().setLinearVelocity(playerId, velocity);
+        entity->transform.position.x += horizontal * 8.0f;
+        if (entity->transform.position.x < -550.0f)
+            entity->transform.position.x = -550.0f;
+        if (entity->transform.position.x > 550.0f)
+            entity->transform.position.x = 550.0f;
     });
-    engine.window().setPaintHandler([&engine, playerId, groundId](void* nativeDc, int width, int height) {
-        drawScene(engine, playerId, groundId, nativeDc, width, height);
+
+    engine.window().setPaintHandler([&engine, ballId, paddleId, groundId](void* nativeDc, int width, int height) {
+        ycode::Canvas2D canvas(nativeDc, width, height);
+        if (auto* g = engine.scene().findEntity(groundId))
+            drawBox(canvas, *g, width, height, 768.0f, 32.0f, ycode::Color{72, 92, 112, 255});
+        if (auto* p = engine.scene().findEntity(paddleId))
+            drawBox(canvas, *p, width, height, 160.0f, 20.0f, ycode::Color{54, 162, 235, 255});
+        if (auto* b = engine.scene().findEntity(ballId))
+            drawCircle(canvas, *b, width, height, 24.0f, ycode::Color{255, 200, 60, 255});
     });
     engine.setRenderHandler([&engine]() {
         engine.window().invalidate();
@@ -231,7 +223,8 @@ This is a YCode game project powered by the built-in YCode Engine.
 
 ## Controls
 
-- Arrow keys or WASD: drive the loaded `Player` physics body.
+- Left / Right arrows (or A / D): move the paddle to bounce the ball.
+- Watch the terminal for contact events (ball hits paddle / ground).
 
 ## Build
 
@@ -248,27 +241,46 @@ R"({
   "name": "%1 Main Scene",
   "entities": [
     {
-      "name": "Player",
+      "name": "Ball",
       "transform": {
-        "position": [0.0, 80.0],
+        "position": [0.0, 100.0],
         "rotationDegrees": 0.0,
         "scale": [1.0, 1.0]
       },
       "physics2D": {
         "bodyType": "dynamic",
-        "box": {
-          "halfSizeMeters": [0.375, 0.375],
-          "fixedRotation": true
+        "circle": {
+          "radiusMeters": 0.375,
+          "restitution": 0.9,
+          "friction": 0.1
         }
       },
       "properties": {
-        "kind": "prototype"
+        "kind": "ball"
+      }
+    },
+    {
+      "name": "Paddle",
+      "transform": {
+        "position": [0.0, -140.0],
+        "rotationDegrees": 0.0,
+        "scale": [1.0, 1.0]
+      },
+      "physics2D": {
+        "bodyType": "kinematic",
+        "box": {
+          "halfSizeMeters": [1.25, 0.15],
+          "friction": 0.5
+        }
+      },
+      "properties": {
+        "kind": "paddle"
       }
     },
     {
       "name": "Ground",
       "transform": {
-        "position": [0.0, -160.0],
+        "position": [0.0, -200.0],
         "rotationDegrees": 0.0,
         "scale": [1.0, 1.0]
       },

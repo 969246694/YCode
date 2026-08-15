@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 源文件统一按 UTF-8 解释，避免中文注释在 GBK 代码页下被误读。
+# PUBLIC 让链接引擎的游戏项目也带上 /utf-8（引擎头文件含中文注释）。
 if(MSVC)
     add_compile_options(/utf-8)
 endif()
@@ -66,6 +67,10 @@ target_include_directories(ycode_engine
 )
 
 target_compile_features(ycode_engine PUBLIC cxx_std_17)
+
+if(MSVC)
+    target_compile_options(ycode_engine PUBLIC /utf-8)
+endif()
 
 if(WIN32)
     target_compile_definitions(ycode_engine PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
