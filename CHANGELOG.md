@@ -68,6 +68,7 @@
 - 新增碰撞接触事件与命中事件：`PhysicsWorld2D::setContactHandler`（接触开始/结束）与 `setHitHandler`（碰撞点/法线/接近速度，球撞砖必备）；修复 Box2D 3.x 形状默认关闭事件的问题（`enableContactEvents`/`enableHitEvents` 现已在 attach 时开启）。
 - 新增射线检测：`PhysicsWorld2D::castRay(from, to)` 返回命中的首个实体 id 与命中点（场景像素坐标）。
 - 新增贴图 `Texture2D`：GDI+ 加载 PNG/BMP/JPG 等，`Canvas2D::drawImage` 绘制（Windows）。
+- 新增文字绘制 `Canvas2D::drawText`（GDI 字体渲染，游戏 UI 显示分数/标签）。
 - 新增音频 `AudioPlayer`：`PlaySound` 异步播放 WAV（可循环），跨平台预留 null 实现。
 - 新增 `Scene::findEntitiesByProperty(key, value)`：按属性键值检索实体（含 const 版本）。
 

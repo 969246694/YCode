@@ -2,6 +2,7 @@
 #define YCODE_CANVAS2D_H
 
 #include <cstdint>
+#include <string>
 
 namespace ycode {
 
@@ -24,6 +25,7 @@ public:
     void fillRect(float x, float y, float width, float height, Color color);
     void strokeRect(float x, float y, float width, float height, Color color, int thickness = 1);
     void drawImage(const Texture2D& texture, float x, float y, float width, float height);
+    void drawText(const std::string& text, float x, float y, Color color, float fontSize = 16.0f);
 
 private:
     void* nativeDc_ = nullptr;

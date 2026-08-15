@@ -114,6 +114,8 @@ if (hit != ycode::kInvalidEntityId) { /* 命中了实体 hit */ }
 ycode::Texture2D tex;
 if (tex.loadFromFile("assets/player.png"))
     canvas.drawImage(tex, x, y, width, height);
+
+canvas.drawText("Score: 100", 16.0f, 16.0f, ycode::Color{255, 255, 255, 255}, 20.0f);
 ```
 
 ## Audio

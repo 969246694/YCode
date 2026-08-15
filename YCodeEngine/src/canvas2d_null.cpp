@@ -32,4 +32,8 @@ void Canvas2D::drawImage(const Texture2D&, float, float, float, float)
 {
 }
 
+void Canvas2D::drawText(const std::string&, float, float, Color, float)
+{
+}
+
 } // namespace ycode

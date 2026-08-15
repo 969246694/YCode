@@ -97,4 +97,23 @@ void Canvas2D::drawImage(const Texture2D& texture, float x, float y, float width
     DeleteDC(memDc);
 }
 
+void Canvas2D::drawText(const std::string& text, float x, float y, Color color, float fontSize)
+{
+    HDC dc = static_cast<HDC>(nativeDc_);
+    if (!dc || text.empty())
+        return;
+
+    HFONT font = CreateFontA(-static_cast<int>(fontSize), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                             CLEARTYPE_QUALITY, DEFAULT_PITCH, "Consolas");
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    int oldMode = SetBkMode(dc, TRANSPARENT);
+    COLORREF oldColor = SetTextColor(dc, toColorRef(color));
+    TextOutA(dc, static_cast<int>(x), static_cast<int>(y), text.c_str(), static_cast<int>(text.size()));
+    SetTextColor(dc, oldColor);
+    SetBkMode(dc, oldMode);
+    SelectObject(dc, oldFont);
+    DeleteObject(font);
+}
+
 } // namespace ycode
