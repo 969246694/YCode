@@ -29,6 +29,8 @@ cmake_install.cmake
 
 # Runtime/session files
 agent_session.json
+agent_tasks.json
+agent_memory.json
 *.session
 *.test
 _agent_restart.bat

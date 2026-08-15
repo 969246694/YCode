@@ -29,6 +29,9 @@ const std::string SIGNAL_RELOAD_STYLE = "SIGNAL:RELOAD_STYLE";
 const std::string SIGNAL_ASSISTANT_START = "SIGNAL:ASSISTANT_START";
 const std::string SIGNAL_ASSISTANT_END = "SIGNAL:ASSISTANT_END";
 
+// 整轮回复（可能跨多个工具迭代）只发射一次 START，避免 GUI 拆出多个气泡
+static bool g_assistantStartEmitted = false;
+
 // ============================================================
 // HTTP 回调
 // ============================================================
@@ -326,7 +329,11 @@ size_t StreamWriteCallback(void *ptr, size_t size, size_t nmemb, void *userdata)
                 if (!ctx->contentStarted)
                 {
                     ctx->contentStarted = true;
-                    std::cout << SIGNAL_ASSISTANT_START << std::endl;
+                    if (!g_assistantStartEmitted)
+                    {
+                        g_assistantStartEmitted = true;
+                        std::cout << SIGNAL_ASSISTANT_START << std::endl;
+                    }
                 }
                 ctx->content += text;
                 std::cout << text << std::flush; // 流式打印正文
@@ -1246,6 +1253,8 @@ public:
     {
         if (!userMessage.empty())
             conversationHistory.push_back({{"role", "user"}, {"content", userMessage}});
+
+        g_assistantStartEmitted = false; // 新一轮回复：允许发射一次 START
 
         for (int iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++)
         {
