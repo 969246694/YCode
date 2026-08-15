@@ -38,9 +38,10 @@ set(YCODE_ICON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../YCode.ico")
 if(NOT EXISTS "${YCODE_ICON_SOURCE}")
     set(YCODE_ICON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
 endif()
-# 归一化为不含 ".." 的绝对路径，避免 RC 编译器解析失败
+# 归一化为不含 ".." 的绝对路径，并改用正斜杠：
+# 反斜杠路径在 CI 的 rc.exe 下可能被当作转义序列误解释。
 get_filename_component(YCODE_ICON_PATH "${YCODE_ICON_SOURCE}" ABSOLUTE)
-file(TO_NATIVE_PATH "${YCODE_ICON_PATH}" YCODE_ICON_PATH)
+string(REPLACE "\\" "/" YCODE_ICON_PATH "${YCODE_ICON_PATH}")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/YCode.rc.in" "${CMAKE_CURRENT_BINARY_DIR}/YCode.rc" @ONLY)
 
 set(RESOURCES
