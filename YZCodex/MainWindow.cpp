@@ -82,6 +82,16 @@ MainWindow::MainWindow(QWidget *parent)
                                  "推荐设置环境变量 DEEPSEEK_API_KEY；也可以在设置中输入临时 API Key。");
     }
 
+    // 欢迎语（客户端展示，不写入会话历史）
+    chatDisplay->appendAssistantMessage(
+        "欢迎使用 YCode 👋\n\n"
+        "我是你的 AI 编程助手，可以帮你：\n"
+        "• 阅读与理解项目代码\n"
+        "• 编写、重构、调试代码\n"
+        "• 运行命令与构建项目\n"
+        "• 实时预览游戏开发\n\n"
+        "直接在下方输入问题开始吧。");
+
     // 安装事件过滤器监听编辑器光标变化
     installEventFilter(this);
 }

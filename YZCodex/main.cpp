@@ -4,6 +4,30 @@
 #include <QAbstractAnimation>
 #include "MainWindow.h"
 
+#ifdef _WIN32
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
+#endif
+
+namespace {
+// Windows 10/11 深色标题栏：与应用的深色主题保持一致
+void enableDarkTitleBar(QWidget *window)
+{
+#ifdef _WIN32
+    HWND hwnd = reinterpret_cast<HWND>(window->winId());
+    if (!hwnd)
+        return;
+    BOOL dark = TRUE;
+    // DWMWA_USE_IMMERSIVE_DARK_MODE：Win10 1903+ 为 20，早期版本为 19
+    HRESULT hr = DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
+    if (FAILED(hr))
+        DwmSetWindowAttribute(hwnd, 19, &dark, sizeof(dark));
+#else
+    Q_UNUSED(window);
+#endif
+}
+} // namespace
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -34,6 +58,7 @@ int main(int argc, char *argv[])
 
     MainWindow window;
     window.show();
+    enableDarkTitleBar(&window);
 
     // 窗口启动淡入
     QPropertyAnimation *fade = new QPropertyAnimation(&window, "windowOpacity");
