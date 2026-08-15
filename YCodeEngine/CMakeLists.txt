@@ -41,6 +41,7 @@ add_library(ycode_engine STATIC
     src/resource_manager.cpp
     src/scene.cpp
     src/scene_loader.cpp
+    src/scene_saver.cpp
 )
 
 if(WIN32)

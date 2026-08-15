@@ -4,6 +4,7 @@
 #include "ycode/resource_manager.h"
 #include "ycode/scene.h"
 #include "ycode/scene_loader.h"
+#include "ycode/scene_saver.h"
 #include "ycode/texture.h"
 
 #include <cmath>
@@ -501,6 +502,59 @@ static void testEngineLifecycle()
 }
 
 // ------------------------------------------------------------
+// SceneSaver 往返：加载 -> 保存 -> 再加载，比对数据
+// ------------------------------------------------------------
+static void testSceneSaverRoundTrip()
+{
+    const char* srcJson = R"({
+      "name": "RT",
+      "entities": [
+        {"name":"A","transform":{"position":[10,20]},"physics2D":{"bodyType":"dynamic","circle":{"radiusMeters":0.4}},"properties":{"kind":"a"}},
+        {"name":"B","transform":{"position":[-5,3]},"physics2D":{"bodyType":"static","box":{"halfSizeMeters":[1,2]}}}
+      ]
+    })";
+
+    ycode::Scene loaded;
+    std::string err;
+    CHECK(ycode::SceneLoader::loadFromText(srcJson, loaded, &err));
+
+    std::string saved = ycode::SceneSaver::saveToText(loaded);
+    CHECK(saved.find("RT") != std::string::npos);
+
+    ycode::Scene loaded2;
+    CHECK(ycode::SceneLoader::loadFromText(saved, loaded2, &err));
+    CHECK_EQ(loaded2.name(), std::string("RT"));
+    CHECK_EQ(loaded2.entityCount(), std::size_t(2));
+
+    ycode::Entity* a = loaded2.findEntityByName("A");
+    if (a)
+    {
+        CHECK_NEAR(a->transform.position.x, 10.0f, 1e-4f);
+        CHECK_NEAR(a->transform.position.y, 20.0f, 1e-4f);
+        CHECK(a->physics2D.useCircle);
+        CHECK_NEAR(a->physics2D.circle.radiusMeters, 0.4f, 1e-5f);
+        CHECK_EQ(a->properties.at("kind"), std::string("a"));
+    }
+
+    ycode::Entity* b = loaded2.findEntityByName("B");
+    if (b)
+    {
+        CHECK(!b->physics2D.useCircle);
+        CHECK(!b->physics2D.useCapsule);
+        CHECK_NEAR(b->physics2D.box.halfSizeMeters.x, 1.0f, 1e-5f);
+        CHECK_NEAR(b->physics2D.box.halfSizeMeters.y, 2.0f, 1e-5f);
+    }
+
+    // 写文件往返
+    const char* path = "ycode_engine_test_scene_save.json";
+    CHECK(ycode::SceneSaver::saveToFile(path, loaded, &err));
+    ycode::Scene loaded3;
+    CHECK(ycode::SceneLoader::loadFromFile(path, loaded3, &err));
+    CHECK_EQ(loaded3.entityCount(), std::size_t(2));
+    std::remove(path);
+}
+
+// ------------------------------------------------------------
 // 贴图加载（GDI+ 解码 BMP）与按属性检索实体
 // ------------------------------------------------------------
 static bool writeTestBmp(const char* path, int w, int h)
@@ -592,6 +646,7 @@ int main()
     testEngineLifecycle();
     testFileIo();
     testTextureAndProperties();
+    testSceneSaverRoundTrip();
 
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
     if (g_failures > 0)

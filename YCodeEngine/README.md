@@ -50,6 +50,7 @@ ctest --test-dir build -C Release --output-on-failure
 - `include/ycode/canvas2d.h`: tiny 2D drawing wrapper for paint callbacks
 - `include/ycode/scene.h`: scene, entity, and 2D transform model
 - `include/ycode/scene_loader.h`: JSON scene manifest loader
+- `include/ycode/scene_saver.h`: scene -> JSON serializer (round-trip compatible with the loader)
 - `include/ycode/event_bus.h`: publish/subscribe event bus
 - `include/ycode/window.h`: native window abstraction
 - `include/ycode/plugin.h`: plugin ABI

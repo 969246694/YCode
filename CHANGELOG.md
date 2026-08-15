@@ -71,6 +71,7 @@
 - 新增文字绘制 `Canvas2D::drawText`（GDI 字体渲染，游戏 UI 显示分数/标签）。
 - 新增音频 `AudioPlayer`：`PlaySound` 异步播放 WAV（可循环），跨平台预留 null 实现。
 - 新增 `Scene::findEntitiesByProperty(key, value)`：按属性键值检索实体（含 const 版本）。
+- 新增 `SceneSaver`：把场景序列化为 JSON（与 `SceneLoader` 格式兼容，可往返），含往返测试。
 
 ### 测试与 CI
 
