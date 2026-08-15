@@ -383,6 +383,64 @@ static void testPhysics()
 
     physics.clear();
     CHECK_EQ(physics.bodyCount(), std::size_t(0));
+
+    // 碰撞接触事件：动态球落到静态地面上应触发 begin 接触
+    {
+        ycode::Scene contactScene;
+        ycode::EntityId groundId = contactScene.createEntity("Ground").id;
+        contactScene.findEntity(groundId)->transform.position = ycode::Vec2{0.0f, 0.0f};
+        ycode::EntityId ballId = contactScene.createEntity("Ball").id;
+        contactScene.findEntity(ballId)->transform.position = ycode::Vec2{0.0f, 300.0f};
+
+        ycode::PhysicsWorld2D cPhysics;
+        CHECK(cPhysics.attachBox(contactScene, groundId, ycode::BodyType2D::Static, {}, &err));
+        CHECK(cPhysics.attachBox(contactScene, ballId, ycode::BodyType2D::Dynamic, {}, &err));
+
+        int beginCount = 0;
+        int hitCount = 0;
+        bool sawBall = false;
+        bool sawGround = false;
+        cPhysics.setContactHandler([&](ycode::EntityId a, ycode::EntityId b, bool begin) {
+            if (begin)
+            {
+                ++beginCount;
+                if (a == ballId || b == ballId) sawBall = true;
+                if (a == groundId || b == groundId) sawGround = true;
+            }
+        });
+        cPhysics.setHitHandler([&](ycode::EntityId, ycode::EntityId, ycode::Vec2, ycode::Vec2, float) {
+            ++hitCount;
+        });
+
+        // 让球下落约 1 秒
+        for (int i = 0; i < 120; ++i)
+            cPhysics.step(contactScene, 1.0f / 60.0f);
+
+        CHECK(beginCount > 0);
+        CHECK(sawBall && sawGround);
+        CHECK(hitCount > 0); // 球以 >1 m/s 落地，应触发命中事件
+    }
+
+    // 射线检测：穿过静态盒子应命中，偏离应未命中
+    {
+        ycode::Scene rayScene;
+        ycode::EntityId target = rayScene.createEntity("Target").id;
+        rayScene.findEntity(target)->transform.position = ycode::Vec2{50.0f, 0.0f};
+
+        ycode::PhysicsWorld2D rPhysics;
+        CHECK(rPhysics.attachBox(rayScene, target, ycode::BodyType2D::Static, {}, &err));
+
+        ycode::Vec2 hit;
+        ycode::EntityId hitId = rPhysics.castRay(ycode::Vec2{0.0f, 0.0f}, ycode::Vec2{100.0f, 0.0f}, &hit);
+        CHECK(hitId == target);
+        CHECK(hit.x > 0.0f && hit.x < 100.0f);
+
+        ycode::EntityId hitId2 = rPhysics.castRay(ycode::Vec2{200.0f, 0.0f}, ycode::Vec2{0.0f, 0.0f}, nullptr);
+        CHECK(hitId2 == target);
+
+        ycode::EntityId miss = rPhysics.castRay(ycode::Vec2{0.0f, 500.0f}, ycode::Vec2{100.0f, 500.0f}, nullptr);
+        CHECK(miss == ycode::kInvalidEntityId);
+    }
 }
 
 // ------------------------------------------------------------

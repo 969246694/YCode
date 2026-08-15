@@ -4,6 +4,7 @@
 #include "ycode/scene.h"
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -55,12 +56,27 @@ public:
 
     void step(Scene& scene, float deltaSeconds);
 
+    // 碰撞接触事件：每次 step 后触发，begin=true 表示接触开始、false 表示接触结束。
+    // 参数为发生接触的两个实体 id。
+    using ContactHandler = std::function<void(EntityId a, EntityId b, bool begin)>;
+    void setContactHandler(ContactHandler handler);
+
+    // 命中事件：两个形状以超过阈值速度碰撞时触发，给出碰撞点（像素）、法线与接近速度（米/秒）。
+    using HitHandler = std::function<void(EntityId a, EntityId b, Vec2 point, Vec2 normal, float approachSpeed)>;
+    void setHitHandler(HitHandler handler);
+
+    // 射线检测（场景像素坐标）：从 from 射向 to，返回命中的第一个实体 id；
+    // 未命中返回 kInvalidEntityId；可选输出命中点（像素坐标）。
+    EntityId castRay(const Vec2& from, const Vec2& to, Vec2* hitPoint = nullptr) const;
+
     bool setLinearVelocity(EntityId entityId, Vec2 metersPerSecond);
     Vec2 linearVelocity(EntityId entityId) const;
 
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
+    ContactHandler contactHandler_;
+    HitHandler hitHandler_;
 };
 
 } // namespace ycode

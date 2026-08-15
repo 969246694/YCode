@@ -83,6 +83,29 @@ ctest --test-dir build -C Release --output-on-failure
 
 `Engine::loadScene()` automatically clears and rebuilds `PhysicsWorld2D` bodies from these declarations.
 
+## Contact & hit events
+
+`PhysicsWorld2D` reports collisions every `step()`:
+
+```cpp
+engine.physics().setContactHandler([](ycode::EntityId a, ycode::EntityId b, bool begin) {
+    // begin=true 接触开始，false 接触结束
+});
+
+engine.physics().setHitHandler([](ycode::EntityId a, ycode::EntityId b,
+                                  ycode::Vec2 point, ycode::Vec2 normal, float speed) {
+    // 球撞砖：point 为碰撞点（像素），normal 为法线，speed 为接近速度（米/秒）
+});
+```
+
+## Ray cast
+
+```cpp
+ycode::Vec2 hitPoint;
+ycode::EntityId hit = engine.physics().castRay(from, to, &hitPoint);
+if (hit != ycode::kInvalidEntityId) { /* 命中了实体 hit */ }
+```
+
 Circle colliders are supported via the `circle` field (mutually exclusive with `box`; if both present, `circle` wins):
 
 ```json

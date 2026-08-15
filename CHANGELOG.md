@@ -62,6 +62,8 @@
 - 引擎统一添加 `/utf-8` 编译选项（MSVC），避免中文注释在 GBK 代码页下被误读。
 - 新增圆形碰撞体 `CircleCollider2D`：`SceneLoader` 支持 `"circle": { "radiusMeters": ... }`，`PhysicsWorld2D::attachCircle` 挂接 Box2D 圆形刚体。
 - 新增胶囊碰撞体 `CapsuleCollider2D`：`SceneLoader` 支持 `"capsule": { "center1": [...], "center2": [...], "radiusMeters": ... }`（优先级 capsule > circle > box），`PhysicsWorld2D::attachCapsule` 挂接 Box2D 胶囊刚体。
+- 新增碰撞接触事件与命中事件：`PhysicsWorld2D::setContactHandler`（接触开始/结束）与 `setHitHandler`（碰撞点/法线/接近速度，球撞砖必备）；修复 Box2D 3.x 形状默认关闭事件的问题（`enableContactEvents`/`enableHitEvents` 现已在 attach 时开启）。
+- 新增射线检测：`PhysicsWorld2D::castRay(from, to)` 返回命中的首个实体 id 与命中点（场景像素坐标）。
 
 ### 测试与 CI
 

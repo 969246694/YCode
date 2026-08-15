@@ -129,6 +129,18 @@ struct PhysicsWorld2D::Impl {
                             });
     }
 
+    EntityId entityForBody(b2BodyId bodyId) const
+    {
+        for (const BodyBinding& binding : bodies)
+        {
+            if (binding.bodyId.index1 == bodyId.index1 &&
+                binding.bodyId.world0 == bodyId.world0 &&
+                binding.bodyId.generation == bodyId.generation)
+                return binding.entityId;
+        }
+        return kInvalidEntityId;
+    }
+
     PhysicsConfig2D config;
     b2WorldId worldId = b2_nullWorldId;
     std::vector<BodyBinding> bodies;
@@ -219,6 +231,8 @@ bool PhysicsWorld2D::attachBox(Scene& scene,
     shapeDef.density = collider.density;
     shapeDef.material.friction = collider.friction;
     shapeDef.material.restitution = collider.restitution;
+    shapeDef.enableContactEvents = true; // 开启接触事件（默认关闭）
+    shapeDef.enableHitEvents = true;     // 开启命中事件（默认关闭）
 
     b2Polygon box = b2MakeBox(collider.halfSizeMeters.x, collider.halfSizeMeters.y);
     b2CreatePolygonShape(bodyId, &shapeDef, &box);
@@ -274,6 +288,8 @@ bool PhysicsWorld2D::attachCircle(Scene& scene,
     shapeDef.density = collider.density;
     shapeDef.material.friction = collider.friction;
     shapeDef.material.restitution = collider.restitution;
+    shapeDef.enableContactEvents = true; // 开启接触事件（默认关闭）
+    shapeDef.enableHitEvents = true;     // 开启命中事件（默认关闭）
 
     b2Circle circle;
     circle.center = b2Vec2{0.0f, 0.0f};
@@ -331,6 +347,8 @@ bool PhysicsWorld2D::attachCapsule(Scene& scene,
     shapeDef.density = collider.density;
     shapeDef.material.friction = collider.friction;
     shapeDef.material.restitution = collider.restitution;
+    shapeDef.enableContactEvents = true; // 开启接触事件（默认关闭）
+    shapeDef.enableHitEvents = true;     // 开启命中事件（默认关闭）
 
     b2Capsule capsule;
     capsule.center1 = toB2(collider.center1);
@@ -431,6 +449,42 @@ void PhysicsWorld2D::step(Scene& scene, float deltaSeconds)
 
     b2World_Step(impl_->worldId, deltaSeconds, impl_->config.subStepCount);
 
+    // 派发碰撞接触事件（接触开始/结束）
+    if (contactHandler_)
+    {
+        b2ContactEvents events = b2World_GetContactEvents(impl_->worldId);
+        for (int i = 0; i < events.beginCount; ++i)
+        {
+            b2BodyId bodyA = b2Shape_GetBody(events.beginEvents[i].shapeIdA);
+            b2BodyId bodyB = b2Shape_GetBody(events.beginEvents[i].shapeIdB);
+            EntityId ea = impl_->entityForBody(bodyA);
+            EntityId eb = impl_->entityForBody(bodyB);
+            if (ea != kInvalidEntityId && eb != kInvalidEntityId)
+                contactHandler_(ea, eb, true);
+        }
+        for (int i = 0; i < events.endCount; ++i)
+        {
+            b2BodyId bodyA = b2Shape_GetBody(events.endEvents[i].shapeIdA);
+            b2BodyId bodyB = b2Shape_GetBody(events.endEvents[i].shapeIdB);
+            EntityId ea = impl_->entityForBody(bodyA);
+            EntityId eb = impl_->entityForBody(bodyB);
+            if (ea != kInvalidEntityId && eb != kInvalidEntityId)
+                contactHandler_(ea, eb, false);
+        }
+        for (int i = 0; i < events.hitCount; ++i)
+        {
+            b2BodyId bodyA = b2Shape_GetBody(events.hitEvents[i].shapeIdA);
+            b2BodyId bodyB = b2Shape_GetBody(events.hitEvents[i].shapeIdB);
+            EntityId ea = impl_->entityForBody(bodyA);
+            EntityId eb = impl_->entityForBody(bodyB);
+            if (hitHandler_ && ea != kInvalidEntityId && eb != kInvalidEntityId)
+                hitHandler_(ea, eb,
+                            impl_->physicsToScene(events.hitEvents[i].point),
+                            toYCode(events.hitEvents[i].normal),
+                            events.hitEvents[i].approachSpeed);
+        }
+    }
+
     for (const auto& binding : impl_->bodies)
     {
         Entity* entity = scene.findEntity(binding.entityId);
@@ -442,6 +496,35 @@ void PhysicsWorld2D::step(Scene& scene, float deltaSeconds)
         entity->transform.position = impl_->physicsToScene(position);
         entity->transform.rotationDegrees = radiansToDegrees(b2Rot_GetAngle(rotation));
     }
+}
+
+void PhysicsWorld2D::setContactHandler(ContactHandler handler)
+{
+    contactHandler_ = std::move(handler);
+}
+
+void PhysicsWorld2D::setHitHandler(HitHandler handler)
+{
+    hitHandler_ = std::move(handler);
+}
+
+EntityId PhysicsWorld2D::castRay(const Vec2& from, const Vec2& to, Vec2* hitPoint) const
+{
+    if (B2_IS_NULL(impl_->worldId))
+        return kInvalidEntityId;
+
+    b2Vec2 origin = impl_->sceneToPhysics(from);
+    b2Vec2 translation = impl_->sceneToPhysics(to) - origin;
+    b2QueryFilter filter = b2DefaultQueryFilter();
+    b2RayResult result = b2World_CastRayClosest(impl_->worldId, origin, translation, filter);
+    if (!result.hit)
+        return kInvalidEntityId;
+
+    if (hitPoint)
+        *hitPoint = impl_->physicsToScene(result.point);
+
+    b2BodyId body = b2Shape_GetBody(result.shapeId);
+    return impl_->entityForBody(body);
 }
 
 bool PhysicsWorld2D::setLinearVelocity(EntityId entityId, Vec2 metersPerSecond)
