@@ -145,7 +145,8 @@ void MainWindow::onFileTreeDoubleClicked(const QModelIndex &index)
         }
     }
 
-    // 打开新标签页
+    // 打开新标签页（移除欢迎页）
+    removeEditorWelcomePage();
     QFile file(filePath);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
@@ -443,6 +444,8 @@ void MainWindow::openFile()
     QString content = QString::fromUtf8(file.readAll());
     file.close();
 
+    removeEditorWelcomePage();
+
     CodeEditor *editor = new CodeEditor();
     editor->setPlainText(content);
     editor->setFilePath(filePath);
@@ -532,6 +535,7 @@ void MainWindow::saveAsFile()
 
 void MainWindow::newFile()
 {
+    removeEditorWelcomePage();
     CodeEditor *editor = new CodeEditor();
     editor->setPlainText("// 新文件\n\n");
     applyPanelThemeToEditor(editor);

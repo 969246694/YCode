@@ -128,8 +128,12 @@ void MainWindow::setupUI()
     connect(editorTabs->tabBar(), &QTabBar::tabCloseRequested, [this](int index)
             {
         QWidget *widget = editorTabs->widget(index);
+        if (widget == editorWelcomePage)
+            return;
         editorTabs->removeTab(index);
-        delete widget; });
+        delete widget;
+        if (editorTabs->count() == 0)
+            ensureEditorWelcomePage(); });
 
     editorLayout->addWidget(editorTabs);
 
@@ -405,8 +409,54 @@ void MainWindow::setupFileExplorer()
 
 void MainWindow::setupEditorArea()
 {
-    // 编辑器标签页已在 setupUI() 中创建
-    // 这里可以添加欢迎页
+    // 编辑器欢迎页：无打开文件时显示
+    editorWelcomePage = new QWidget();
+    editorWelcomePage->setStyleSheet("QWidget { background: #1E1E1E; }");
+    QVBoxLayout *welcomeLayout = new QVBoxLayout(editorWelcomePage);
+    welcomeLayout->setAlignment(Qt::AlignCenter);
+    welcomeLayout->setSpacing(12);
+
+    QLabel *logoLabel = new QLabel("YCode", editorWelcomePage);
+    logoLabel->setObjectName("welcomeLogo");
+    logoLabel->setAlignment(Qt::AlignCenter);
+    logoLabel->setStyleSheet(
+        "QLabel {"
+        "    font-size: 48px;"
+        "    font-weight: bold;"
+        "    color: #3C3C3C;"
+        "    letter-spacing: 4px;"
+        "}");
+
+    QLabel *hintLabel = new QLabel("打开文件开始编辑，或在右侧与 AI 助手对话", editorWelcomePage);
+    hintLabel->setObjectName("welcomeHint");
+    hintLabel->setAlignment(Qt::AlignCenter);
+    hintLabel->setStyleSheet(
+        "QLabel {"
+        "    font-size: 14px;"
+        "    color: #6E6E6E;"
+        "}");
+
+    welcomeLayout->addWidget(logoLabel);
+    welcomeLayout->addWidget(hintLabel);
+
+    editorTabs->addTab(editorWelcomePage, "🏠 欢迎");
+}
+
+void MainWindow::removeEditorWelcomePage()
+{
+    if (!editorWelcomePage)
+        return;
+    int index = editorTabs->indexOf(editorWelcomePage);
+    if (index >= 0)
+        editorTabs->removeTab(index);
+}
+
+void MainWindow::ensureEditorWelcomePage()
+{
+    if (!editorWelcomePage)
+        return;
+    if (editorTabs->indexOf(editorWelcomePage) < 0)
+        editorTabs->addTab(editorWelcomePage, "🏠 欢迎");
 }
 
 // ============================================================

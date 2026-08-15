@@ -110,6 +110,8 @@ private:
     void appendToChat(const QString &message, bool isUser = true);
     void updateFileTree(const QString &path);
     void updateStatusBar();
+    void removeEditorWelcomePage();      // 打开文件时移除编辑器欢迎页
+    void ensureEditorWelcomePage();      // 标签全部关闭时恢复欢迎页
     void connectAgentSignals();          // ★ 抽取：连接 AgentManager 信号
     bool saveAllModifiedFilesForSelfUpdate();
     bool startYCodeSelfUpdate(const QStringList &arguments = QStringList());
@@ -160,6 +162,7 @@ private:
     // 编辑器区域
     QWidget *editorArea;
     QTabWidget *editorTabs;
+    QWidget *editorWelcomePage;  // 无打开文件时的欢迎页
 
     // 搜索栏 (编辑器内嵌)
     QWidget *searchBar;

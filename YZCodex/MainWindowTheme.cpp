@@ -413,6 +413,31 @@ void MainWindow::applyPanelTheme()
     if (mainSplitter)
         mainSplitter->setStyleSheet(QString("QSplitter::handle { background: %1; height: 2px; width: 2px; }").arg(panelTheme.borderColor));
 
+    if (editorWelcomePage)
+    {
+        editorWelcomePage->setStyleSheet(QString("QWidget { background: %1; }").arg(panelTheme.surfaceBackground));
+        if (QLabel *logo = editorWelcomePage->findChild<QLabel *>("welcomeLogo"))
+        {
+            logo->setStyleSheet(QString(
+                "QLabel {"
+                "    font-size: 48px;"
+                "    font-weight: bold;"
+                "    color: %1;"
+                "    letter-spacing: 4px;"
+                "}")
+                .arg(panelTheme.borderColor));
+        }
+        if (QLabel *hint = editorWelcomePage->findChild<QLabel *>("welcomeHint"))
+        {
+            hint->setStyleSheet(QString(
+                "QLabel {"
+                "    font-size: 14px;"
+                "    color: %1;"
+                "}")
+                .arg(panelTheme.mutedTextColor));
+        }
+    }
+
     QString inputStyle = QString(
         "QLineEdit {"
         "    background: %1;"
