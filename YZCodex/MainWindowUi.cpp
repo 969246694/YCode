@@ -17,6 +17,7 @@
 #include <QCloseEvent>
 #include <QSplitter>
 #include <QTabBar>
+#include <QPlainTextEdit>
 #include <QIcon>
 #include <QShortcut>
 #include <QInputDialog>
@@ -96,7 +97,9 @@ void MainWindow::setupUI()
 
     // 编辑器标签页
     editorTabs = new QTabWidget();
-    editorTabs->setTabsClosable(true);
+    // 注意：不要启用 setTabsClosable(true) —— Qt 6.8.0 在“可关闭 + 带 QTabBar 样式表 + 存在标签页”时，
+    // 关闭按钮渲染路径会空指针崩溃（Qt6Widgets.dll，0xc0000005 / 0xc0000409）。
+    // 关闭按钮本来就被下方样式表设成 image:none 不可见，标签通过 Ctrl+W/菜单关闭，功能不受影响。
     editorTabs->setMovable(true);
     editorTabs->setDocumentMode(true);
     editorTabs->setStyleSheet(
@@ -410,8 +413,11 @@ void MainWindow::setupFileExplorer()
 void MainWindow::setupEditorArea()
 {
     // 编辑器欢迎页：无打开文件时显示
+    // 注意：不要给该页面设置内联样式表（inline stylesheet）——
+    // Qt 6.8 在“内联样式表 + 作为标签页加入 + 全局 QSS 重载”的组合下，
+    // QStyleSheetStyle 重刷样式时会对空对象解引用导致崩溃（Qt6Widgets.dll 空指针读）。
+    // 背景色改由 applyPanelTheme() 用 QPalette + setAutoFillBackground 设置。
     editorWelcomePage = new QWidget();
-    editorWelcomePage->setStyleSheet("QWidget { background: #1E1E1E; }");
     QVBoxLayout *welcomeLayout = new QVBoxLayout(editorWelcomePage);
     welcomeLayout->setAlignment(Qt::AlignCenter);
     welcomeLayout->setSpacing(12);
@@ -439,7 +445,12 @@ void MainWindow::setupEditorArea()
     welcomeLayout->addWidget(logoLabel);
     welcomeLayout->addWidget(hintLabel);
 
-    editorTabs->addTab(editorWelcomePage, "🏠 欢迎");
+    // 重要：欢迎页标签不能在 setupEditorArea() 阶段加入 editorTabs。
+    // 构造函数末尾会调用 reloadStyleSheet() → qApp->setStyleSheet()，Qt 会对
+    // “已存在”的标签页做 QStyleSheetStyle 全局重刷（polish）；若此时标签页里
+    // 已有欢迎页，会触发 Qt 6.8 的崩溃（Qt6Widgets.dll 空指针读）。
+    // 因此这里只创建欢迎页控件，真正的 addTab 延迟到构造函数末尾
+    // （reloadStyleSheet 完成后）由 ensureEditorWelcomePage() 执行。
 }
 
 void MainWindow::removeEditorWelcomePage()

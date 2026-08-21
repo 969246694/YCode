@@ -86,6 +86,13 @@ QTabBar::tab:!selected:hover {
     background-color: #3e3e42;
 }
 
+/* 关闭按钮：image:none 隐藏（否则在 Qt 6.8 下与 QTabBar 样式表组合会触发关闭按钮渲染崩溃） */
+QTabBar::close-button {
+    image: none;
+    background: none;
+    padding: 0px;
+}
+
 /* 组合框 */
 QComboBox {
     background-color: #3c3c3c;

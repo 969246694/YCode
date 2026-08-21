@@ -415,7 +415,11 @@ void MainWindow::applyPanelTheme()
 
     if (editorWelcomePage)
     {
-        editorWelcomePage->setStyleSheet(QString("QWidget { background: %1; }").arg(panelTheme.surfaceBackground));
+        // 背景用 QPalette + setAutoFillBackground，避免内联样式表在全局 QSS 重载时的已知 Qt 崩溃
+        QPalette welcomePalette = editorWelcomePage->palette();
+        welcomePalette.setColor(QPalette::Window, QColor(panelTheme.surfaceBackground));
+        editorWelcomePage->setPalette(welcomePalette);
+        editorWelcomePage->setAutoFillBackground(true);
         if (QLabel *logo = editorWelcomePage->findChild<QLabel *>("welcomeLogo"))
         {
             logo->setStyleSheet(QString(

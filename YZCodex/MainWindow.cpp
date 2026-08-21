@@ -71,6 +71,10 @@ MainWindow::MainWindow(QWidget *parent)
     loadSettings();
     reloadStyleSheet(false);
 
+    // 在全局样式重刷（polish）完成之后再加入编辑器欢迎页标签，
+    // 避免 Qt 6.8 在“启动时已存在标签页 + 全局 QSS 重载”时崩溃
+    ensureEditorWelcomePage();
+
     setWindowTitle("YCode - AI 编程助手");
     setMinimumSize(1200, 800);
     resize(1400, 900);
