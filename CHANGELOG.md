@@ -53,6 +53,12 @@
 
 ### YZCodex（Qt 客户端）
 
+- **修复启动崩溃（严重）**：新增「编辑器欢迎页」后，客户端启动约 5 秒即崩溃（`Qt6Widgets.dll` 空指针读，0xC0000005）。通过最小复现程序 + 崩溃转储反汇编定位到 Qt 6.8.0 的 QStyleSheetStyle 缺陷：构造函数中 `reloadStyleSheet()` → `qApp->setStyleSheet()` 会对启动时「已存在」的标签页做全局样式重刷（polish），若此时 `editorTabs` 中已加入欢迎页标签则崩溃。修复：
+  - 欢迎页标签的 `addTab` 延迟到构造函数末尾（`reloadStyleSheet` 完成后）由 `ensureEditorWelcomePage()` 执行；
+  - 移除 `editorTabs->setTabsClosable(true)`（关闭按钮本就通过 QSS `image:none` 隐藏，标签靠 Ctrl+W/菜单关闭，无视觉影响；且 Qt 6.8 下「可关闭 + QTabBar 样式表」组合本身也有崩溃风险）；
+  - 欢迎页背景改用 `QPalette` + `setAutoFillBackground`，不再设置内联样式表；
+  - `style.qss` 全局补充 `QTabBar::close-button { image:none }` 防护规则。
+  - 已用无 Key / 有 Key 两种场景各跑 3 次 × 12 秒验证不再崩溃。
 - 修复关闭窗口时多标签页场景下保存错文件的问题：`closeEvent` 现在对每个已修改的标签页直接调用 `saveEditorToFile` 保存，而非误存当前标签页；「另存为」被取消时会中止关闭，避免误丢改动。
 - 将约 2800 行的 `MainWindow.cpp` 按职责拆分为 4 个文件：`MainWindow.cpp`（核心逻辑与回调）、`MainWindowUi.cpp`（界面搭建）、`MainWindowTheme.cpp`（主题与配色）、`MainWindowGame.cpp`（游戏开发），纯重构、行为不变。
 - 新增游戏「实时预览」：`游戏开发 → 实时预览` 一键构建并运行游戏；用 `QFileSystemWatcher` 监视游戏项目 `src/`、`scenes/` 与 `CMakeLists.txt`，保存文件后防抖自动重建并重启游戏（热重载循环）。

@@ -59,6 +59,12 @@ logs/
 *.temp
 $*
 
+# Debug/diagnostic scratch files (minidumps, disassembly dumps, repro projects, UI captures)
+_dump*
+_qt_*
+_repro/
+_ui_*.ps1
+
 # OS files
 .DS_Store
 Thumbs.db
